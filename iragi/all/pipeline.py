@@ -1,0 +1,204 @@
+"""Unified analysis pipeline orchestrating Iragi Scan and PDF engines.
+
+Combines document extraction, tabular quality auditing, and multi-file
+batch processing into a consolidated workflow.
+
+Example:
+    >>> from iragi.all.pipeline import analyze
+    >>> # result = analyze("document.pdf")
+"""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+import pandas as pd
+
+from iragi.core.exceptions import IragiDataError
+from iragi.core.models import DataInspectionResult, QualityScore
+from iragi.pdf.extractor import extract
+from iragi.pdf.models import ExtractedDocument
+from iragi.scan.engine import scan, scan_dataframe
+from iragi.scan.reports import inspection_result_to_dict
+
+
+@dataclass
+class UnifiedAnalysisResult:
+    """Consolidated findings combining document extraction and quality audits.
+
+    :param file_path: Source path of analyzed file.
+    :type file_path: str
+    :param file_type: Inferred format ('pdf', 'csv', 'excel', 'json').
+    :type file_type: str
+    :param document: Extracted document model if source is PDF.
+    :type document: Optional[ExtractedDocument]
+    :param tabular_inspections: Quality inspection results for tabular datasets or extracted tables.
+    :type tabular_inspections: List[DataInspectionResult]
+    :param overall_quality_score: Aggregated quality score (0-100).
+    :type overall_quality_score: float
+    :param recommendations: Consolidated prioritized recommendations.
+    :type recommendations: List[str]
+    :param analyzed_at: Inspection timestamp.
+    :type analyzed_at: datetime
+
+    Example:
+        >>> res = UnifiedAnalysisResult("sample.csv", "csv", None, [], 95.0, ["Clean data"])
+        >>> res.overall_quality_score
+        95.0
+    """
+
+    file_path: str
+    file_type: str
+    document: Optional[ExtractedDocument] = None
+    tabular_inspections: List[DataInspectionResult] = field(default_factory=list)
+    overall_quality_score: float = 100.0
+    recommendations: List[str] = field(default_factory=list)
+    analyzed_at: datetime = field(default_factory=datetime.now)
+
+    def summary(self) -> Dict[str, Any]:
+        """Produce a high-level summary dictionary of the unified analysis.
+
+        :return: Summary metrics dict.
+        :rtype: Dict[str, Any]
+
+        Example:
+            >>> res = UnifiedAnalysisResult("test.csv", "csv", None, [], 90.0, [])
+            >>> summary = res.summary()
+            >>> summary["overall_quality_score"]
+            90.0
+        """
+        return {
+            "file_path": self.file_path,
+            "file_type": self.file_type,
+            "overall_quality_score": self.overall_quality_score,
+            "tables_audited": len(self.tabular_inspections),
+            "recommendations_count": len(self.recommendations),
+            "analyzed_at": self.analyzed_at.isoformat(),
+        }
+
+
+def analyze(
+    file_path: Union[str, Path],
+    enable_ocr: bool = False,
+) -> UnifiedAnalysisResult:
+    """Execute end-to-end extraction and quality audit on a file.
+
+    For tabular files (CSV, Excel, JSON), it delegates directly to iragi.scan.
+    For PDF documents, it extracts text/tables via iragi.pdf and pipes extracted
+    tables into iragi.scan for quality auditing.
+
+    :param file_path: Path to target file.
+    :type file_path: Union[str, Path]
+    :param enable_ocr: Whether to run OCR if scanned PDF pages are detected.
+    :type enable_ocr: bool
+    :return: UnifiedAnalysisResult.
+    :rtype: UnifiedAnalysisResult
+    :raises IragiDataError: If file is unsupported or unreadable.
+
+    Example:
+        >>> import tempfile
+        >>> tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        >>> _ = tmp.write("a,b\\n1,2")
+        >>> tmp.close()
+        >>> res = analyze(tmp.name)
+        >>> res.file_type
+        'csv'
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"Target file not found: {path}")
+
+    suffix = path.suffix.lower()
+
+    # Case 1: Tabular data file
+    if suffix in [".csv", ".tsv", ".txt", ".xlsx", ".xls", ".json", ".jsonl"]:
+        tabular_res = scan(path)
+        ftype = "csv" if suffix in [".csv", ".tsv", ".txt"] else ("excel" if "xls" in suffix else "json")
+        return UnifiedAnalysisResult(
+            file_path=str(path),
+            file_type=ftype,
+            document=None,
+            tabular_inspections=[tabular_res],
+            overall_quality_score=tabular_res.quality_score.total_score,
+            recommendations=tabular_res.recommendations,
+            analyzed_at=datetime.now(),
+        )
+
+    # Case 2: PDF Document
+    if suffix == ".pdf":
+        doc = extract(path, extract_tables=True, enable_ocr=enable_ocr)
+        tabular_inspections: List[DataInspectionResult] = []
+        scores: List[float] = []
+        all_recs: List[str] = []
+
+        for idx, table in enumerate(doc.tables, start=1):
+            df = table.to_dataframe()
+            if not df.empty:
+                table_source_name = f"{path.name} [Page {table.page_number} Table #{idx}]"
+                inspection = scan_dataframe(df, source_name=table_source_name)
+                tabular_inspections.append(inspection)
+                scores.append(inspection.quality_score.total_score)
+                all_recs.extend(inspection.recommendations)
+
+        if doc.requires_ocr and not enable_ocr:
+            all_recs.append("Detected potential scanned pages with missing text layer. Consider re-running with OCR enabled.")
+
+        avg_score = round(sum(scores) / len(scores), 2) if scores else 100.0
+
+        return UnifiedAnalysisResult(
+            file_path=str(path),
+            file_type="pdf",
+            document=doc,
+            tabular_inspections=tabular_inspections,
+            overall_quality_score=avg_score,
+            recommendations=list(dict.fromkeys(all_recs)),
+            analyzed_at=datetime.now(),
+        )
+
+    raise IragiDataError(f"Unsupported file format '{suffix}' for unified analysis.")
+
+
+def batch_analyze(
+    target_path: Union[str, Path, List[Union[str, Path]]],
+    recursive: bool = False,
+    enable_ocr: bool = False,
+) -> List[UnifiedAnalysisResult]:
+    """Execute analysis across a batch list of files or directory path.
+
+    :param target_path: Directory path or list of individual file paths.
+    :type target_path: Union[str, Path, List[Union[str, Path]]]
+    :param recursive: Search directories recursively if directory path given.
+    :type recursive: bool
+    :param enable_ocr: Whether to run OCR for detected scanned PDF pages.
+    :type enable_ocr: bool
+    :return: List of UnifiedAnalysisResult objects.
+    :rtype: List[UnifiedAnalysisResult]
+
+    Example:
+        >>> # results = batch_analyze(["data1.csv", "data2.csv"])
+    """
+    files_to_process: List[Path] = []
+
+    if isinstance(target_path, list):
+        files_to_process = [Path(p) for p in target_path]
+    else:
+        path = Path(target_path)
+        if path.is_file():
+            files_to_process = [path]
+        elif path.is_dir():
+            pattern = "**/*" if recursive else "*"
+            supported_suffixes = {".csv", ".tsv", ".xlsx", ".xls", ".json", ".jsonl", ".pdf"}
+            for item in path.glob(pattern):
+                if item.is_file() and item.suffix.lower() in supported_suffixes:
+                    files_to_process.append(item)
+
+    results: List[UnifiedAnalysisResult] = []
+    for file_item in files_to_process:
+        try:
+            res = analyze(file_item, enable_ocr=enable_ocr)
+            results.append(res)
+        except Exception:
+            # Continue batch execution on individual file failures
+            continue
+
+    return results
