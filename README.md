@@ -329,14 +329,43 @@ iragi/
 
 ## Feuille de route
 
-- [x] Initialisation de l'arborescence et des modèles du domaine (`iragi.core`).
-- [x] Configuration de l'outillage de documentation Sphinx (`bin/docs`, `docs/source/conf.py`).
-- [x] Rédaction du guide de référence et du `README.md`.
-- [ ] Moteur `iragi.scan` (lecteurs CSV, Excel, JSON, profilage et détection d'anomalies).
-- [ ] Moteur `iragi.pdf` (extracteur de texte, détection de tables et métadonnées).
-- [ ] Module `iragi.all` (pipeline d'enchaînement et de consolidation).
-- [ ] Interface CLI complète et exports de rapports HTML/JSON.
-- [ ] Publication sur PyPI sous licence MIT.
+### Phase 1 — Fondations
+- [x] Initialiser le dépôt et `pyproject.toml`.
+- [x] Définir les exceptions et les objets de résultat communs (`iragi.core`).
+- [x] Mettre en place les tests unitaires et l'intégration continue (`.github/workflows/ci.yml`).
+- [x] Configurer la génération de documentation Sphinx (`bin/docs`).
+- [ ] Créer une première CLI de base.
+
+### Phase 2 — Moteur Scan
+- [x] Lire les fichiers CSV.
+- [x] Lire les fichiers Excel.
+- [x] Lire les fichiers JSON.
+- [x] Ajouter le profilage des colonnes.
+- [x] Détecter les valeurs manquantes et les doublons.
+- [x] Ajouter les validations de types et de formats.
+- [x] Produire un premier rapport JSON.
+
+### Phase 3 — Moteur PDF
+- [ ] Extraire le texte avec PyMuPDF.
+- [ ] Lire les métadonnées.
+- [ ] Extraire les tableaux avec pdfplumber.
+- [ ] Ajouter la détection des PDF nécessitant un OCR.
+- [ ] Ajouter l'OCR comme dépendance optionnelle.
+- [ ] Ajouter les exports structurés.
+
+### Phase 4 — Orchestration All
+- [ ] Définir le pipeline commun.
+- [ ] Connecter les résultats du moteur PDF au moteur Scan.
+- [ ] Produire un rapport global.
+- [ ] Ajouter le traitement par lots.
+
+### Phase 5 — Stabilisation et publication
+- [x] Vérifier la disponibilité du nom `iragi` sur PyPI (disponible).
+- [ ] Compléter les tests unitaires et d'intégration.
+- [ ] Documenter les API publiques au fur et à mesure.
+- [ ] Ajouter des exemples d'intégration Django et FastAPI.
+- [ ] Vérifier les dépendances et les métadonnées du package.
+- [ ] Publier la version v0.1.0 sur PyPI.
 
 ---
 
