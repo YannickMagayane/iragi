@@ -12,8 +12,9 @@ Example:
     0
 """
 
+import difflib
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -44,13 +45,17 @@ def auto_clean(
     drop_duplicates: bool = True,
     impute_numeric: str = "mean",
     impute_categorical: str = "mode",
+    fuzzy_dedup: bool = False,
+    fuzzy_columns: Optional[List[str]] = None,
+    fuzzy_threshold: float = 0.85,
 ) -> CleaningResult:
-    """Apply standard remediation operations to a DataFrame.
+    """Apply standard remediation and fuzzy cleaning operations to a DataFrame.
 
     Performs, in order:
-    1. Duplicate row removal.
-    2. Numeric null imputation (mean or median).
-    3. Categorical null imputation (mode).
+    1. Exact duplicate row removal.
+    2. Fuzzy duplicate removal (similarity threshold via difflib).
+    3. Numeric null imputation (mean or median).
+    4. Categorical null imputation (mode).
 
     The source DataFrame is never modified — the result is always a copy.
 
@@ -62,6 +67,12 @@ def auto_clean(
     :type impute_numeric: str
     :param impute_categorical: Strategy for categorical/text nulls: only ``'mode'`` supported.
     :type impute_categorical: str
+    :param fuzzy_dedup: Whether to detect and remove near-duplicate string records.
+    :type fuzzy_dedup: bool
+    :param fuzzy_columns: List of string columns to check for fuzzy near-duplicates.
+    :type fuzzy_columns: Optional[List[str]]
+    :param fuzzy_threshold: Similarity cutoff between 0.0 and 1.0 (default: 0.85).
+    :type fuzzy_threshold: float
     :return: CleaningResult containing the cleaned DataFrame and a change log.
     :rtype: CleaningResult
 
@@ -78,11 +89,38 @@ def auto_clean(
     cleaned = df.copy()
     changes: Dict[str, Any] = {}
 
-    # Step 1: Deduplication
+    # Step 1: Exact Deduplication
     if drop_duplicates:
         before_rows = len(cleaned)
         cleaned = cleaned.drop_duplicates().reset_index(drop=True)
         changes["duplicates_removed"] = before_rows - len(cleaned)
+
+    # Step 1b: Fuzzy Deduplication
+    if fuzzy_dedup and fuzzy_columns:
+        keep_indices = set(range(len(cleaned)))
+        fuzzy_removed = 0
+        for col in fuzzy_columns:
+            if col not in cleaned.columns:
+                continue
+            values = cleaned[col].astype(str).tolist()
+            seen_representatives: Dict[int, str] = {}
+            for i, val in enumerate(values):
+                if i not in keep_indices:
+                    continue
+                norm_val = val.strip().lower()
+                matched_dup = False
+                for rep_idx, rep_str in seen_representatives.items():
+                    sim = difflib.SequenceMatcher(None, norm_val, rep_str).ratio()
+                    if sim >= fuzzy_threshold:
+                        keep_indices.discard(i)
+                        matched_dup = True
+                        fuzzy_removed += 1
+                        break
+                if not matched_dup:
+                    seen_representatives[i] = norm_val
+
+        cleaned = cleaned.iloc[sorted(keep_indices)].reset_index(drop=True)
+        changes["fuzzy_duplicates_removed"] = fuzzy_removed
 
     # Step 2: Null imputation per column
     nulls_imputed = 0

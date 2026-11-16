@@ -57,6 +57,13 @@ def _check_zip_bomb(
                         f"Potential Zip Bomb detected: uncompressed size ({total_uncompressed} bytes) "
                         f"exceeds safety threshold ({max_uncompressed_bytes} bytes)."
                     )
+                # Check for XML entity declarations (Billion Laughs defense)
+                if info.filename.endswith(".xml") or info.filename.endswith(".rels"):
+                    header = zf.read(info.filename)[:4096].lower()
+                    if b"<!entity" in header or (b"<!doctype" in header and b"[" in header):
+                        raise IragiDataError(
+                            f"Malicious XML entity declaration detected in '{info.filename}' (Billion Laughs defense)."
+                        )
     except zipfile.BadZipFile as exc:
         raise IragiDataError(f"Corrupted or invalid zip archive: {exc}") from exc
 
@@ -149,16 +156,21 @@ def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None, 
 
 
 def read_excel_file(
-    file_path: Union[str, Path], sheet_name: Optional[Union[str, int]] = 0
+    file_path: Union[str, Path],
+    sheet_name: Optional[Union[str, int]] = 0,
+    read_only: bool = False,
 ) -> pd.DataFrame:
     """Read an Excel workbook (.xlsx or .xls) into a pandas DataFrame.
 
     Exposes all available workbook sheet names via DataFrame.attrs['sheet_names'].
+    When ``read_only=True``, uses openpyxl's streaming reader for low memory usage.
 
     :param file_path: Path to the Excel workbook.
     :type file_path: Union[str, Path]
     :param sheet_name: Target sheet name or index (default: 0).
     :type sheet_name: Optional[Union[str, int]]
+    :param read_only: If True, uses memory-efficient streaming reading.
+    :type read_only: bool
     :return: Loaded pandas DataFrame.
     :rtype: pd.DataFrame
     :raises IragiDataError: If Excel reading fails.
@@ -179,6 +191,28 @@ def read_excel_file(
     _check_zip_bomb(path)
 
     try:
+        if read_only and path.suffix.lower() == ".xlsx":
+            import openpyxl
+
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            try:
+                sheet_names = wb.sheetnames
+                target = (
+                    sheet_names[sheet_name] if isinstance(sheet_name, int) else (sheet_name or sheet_names[0])
+                )
+                ws = wb[target]
+                rows_gen = ws.iter_rows(values_only=True)
+                header = next(rows_gen, None)
+                if header is None:
+                    df = pd.DataFrame()
+                else:
+                    df = pd.DataFrame(rows_gen, columns=list(header))
+                df.attrs["sheet_names"] = sheet_names
+                df.attrs["sheet_name"] = str(sheet_name)
+                return df
+            finally:
+                wb.close()
+
         excel_file = pd.ExcelFile(path)
         all_sheets = excel_file.sheet_names
         df = pd.read_excel(excel_file, sheet_name=sheet_name)
@@ -187,6 +221,34 @@ def read_excel_file(
         return df
     except Exception as exc:
         raise IragiDataError(f"Failed to parse Excel file '{path}': {exc}") from exc
+
+
+def read_parquet_file(file_path: Union[str, Path]) -> pd.DataFrame:
+    """Read an Apache Parquet columnar file into a pandas DataFrame.
+
+    :param file_path: Path to the Parquet file (.parquet, .pq).
+    :type file_path: Union[str, Path]
+    :return: Loaded pandas DataFrame.
+    :rtype: pd.DataFrame
+    :raises IragiDataError: If Parquet reading fails.
+
+    Example:
+        >>> import tempfile
+        >>> import pandas as pd
+        >>> tmp = tempfile.NamedTemporaryFile(suffix='.parquet', delete=False)
+        >>> pd.DataFrame({"a": [1, 2]}).to_parquet(tmp.name)
+        >>> df = read_parquet_file(tmp.name)
+        >>> len(df)
+        2
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"File not found: {path}")
+
+    try:
+        return pd.read_parquet(path)
+    except Exception as exc:
+        raise IragiDataError(f"Failed to parse Parquet file '{path}': {exc}") from exc
 
 
 def read_json_file(file_path: Union[str, Path]) -> pd.DataFrame:
@@ -370,7 +432,9 @@ def load_tabular_file(
         return read_excel_file(path, sheet_name=sheet_name), "excel"
     elif suffix in [".json", ".jsonl", ".ndjson"]:
         return read_json_file(path), "json"
+    elif suffix in [".parquet", ".pq"]:
+        return read_parquet_file(path), "parquet"
     else:
         raise IragiDataError(
-            f"Unsupported file format '{suffix}'. Supported formats are: CSV (.csv, .tsv), Excel (.xlsx, .xls), JSON (.json, .jsonl)."
+            f"Unsupported file format '{suffix}'. Supported formats are: CSV (.csv, .tsv), Excel (.xlsx, .xls), JSON (.json, .jsonl), Parquet (.parquet, .pq)."
         )

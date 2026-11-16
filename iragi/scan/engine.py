@@ -40,11 +40,14 @@ def compute_quality_score(
     config: IragiConfig,
     empty_columns_count: int = 0,
     critical_columns_penalties: Optional[Dict[str, float]] = None,
+    column_weights: Optional[Dict[str, float]] = None,
+    column_missing_counts: Optional[Dict[str, int]] = None,
 ) -> QualityScore:
     """Calculate an explainable data quality score on a 0-100 scale.
 
     Includes penalty deductions for missing cells, duplicate rows, statistical
-    outliers, invalid dates, completely empty columns, and critical columns.
+    outliers, invalid dates, completely empty columns, critical columns, and
+    custom column weights.
 
     :param row_count: Number of rows in dataset.
     :type row_count: int
@@ -64,6 +67,10 @@ def compute_quality_score(
     :type empty_columns_count: int
     :param critical_columns_penalties: Mapping of critical column names to penalty points.
     :type critical_columns_penalties: Optional[Dict[str, float]]
+    :param column_weights: Custom importance weights per column name.
+    :type column_weights: Optional[Dict[str, float]]
+    :param column_missing_counts: Missing cell counts per column name.
+    :type column_missing_counts: Optional[Dict[str, int]]
     :return: QualityScore instance with exact deduction breakdown.
     :rtype: QualityScore
 
@@ -94,6 +101,16 @@ def compute_quality_score(
     empty_column_penalty = round(min(30.0, empty_columns_count * 15.0), 2)
     critical_penalty = round(min(40.0, sum((critical_columns_penalties or {}).values())), 2)
 
+    column_weights_penalty = 0.0
+    if column_weights and column_missing_counts and row_count > 0:
+        extra_penalty = 0.0
+        for col, weight in column_weights.items():
+            if weight > 1.0:
+                missing = column_missing_counts.get(col, 0)
+                if missing > 0:
+                    extra_penalty += (missing / row_count) * (weight - 1.0) * 10.0
+        column_weights_penalty = round(min(40.0, extra_penalty), 2)
+
     total_deductions = (
         missing_penalty
         + duplicate_penalty
@@ -101,6 +118,7 @@ def compute_quality_score(
         + invalid_date_penalty
         + empty_column_penalty
         + critical_penalty
+        + column_weights_penalty
     )
     final_score = max(0.0, round(100.0 - total_deductions, 2))
 
@@ -111,6 +129,7 @@ def compute_quality_score(
         "invalid_date_penalty": invalid_date_penalty,
         "empty_column_penalty": empty_column_penalty,
         "critical_column_penalty": critical_penalty,
+        "column_weights_penalty": column_weights_penalty,
     }
 
     explanations: List[str] = []
@@ -131,6 +150,10 @@ def compute_quality_score(
             explanations.append(
                 f"Critical column '{col_name}' has missing values (deducted {pen} pts)."
             )
+    if column_weights_penalty > 0:
+        explanations.append(
+            f"Column weights penalty deducted {column_weights_penalty} pts based on custom column importance."
+        )
 
     if not explanations:
         explanations.append("Excellent data hygiene: zero missing, duplicate, or outlier entries detected.")
@@ -195,6 +218,7 @@ def scan_dataframe(
     source_name: str = "in_memory_dataframe",
     config: Optional[IragiConfig] = None,
     critical_columns: Optional[List[str]] = None,
+    column_weights: Optional[Dict[str, float]] = None,
 ) -> DataInspectionResult:
     """Inspect and profile an in-memory pandas DataFrame.
 
@@ -206,6 +230,8 @@ def scan_dataframe(
     :type config: Optional[IragiConfig]
     :param critical_columns: Optional column names treated as critical (heavy null penalties).
     :type critical_columns: Optional[List[str]]
+    :param column_weights: Optional custom importance weights per column name.
+    :type column_weights: Optional[Dict[str, float]]
     :return: Comprehensive DataInspectionResult.
     :rtype: DataInspectionResult
 
@@ -237,6 +263,8 @@ def scan_dataframe(
                     ratio = m_count / row_count
                     critical_penalties[col] = round(min(30.0, max(10.0, ratio * 30.0)), 2)
 
+    column_missing_counts = {p.name: p.missing_count for p in column_profiles}
+
     quality_score = compute_quality_score(
         row_count=row_count,
         column_count=column_count,
@@ -247,6 +275,8 @@ def scan_dataframe(
         config=cfg,
         empty_columns_count=empty_columns_count,
         critical_columns_penalties=critical_penalties,
+        column_weights=column_weights,
+        column_missing_counts=column_missing_counts,
     )
 
     recommendations = generate_recommendations(
@@ -424,6 +454,7 @@ def scan(
     stream: bool = False,
     chunksize: int = 50_000,
     critical_columns: Optional[List[str]] = None,
+    column_weights: Optional[Dict[str, float]] = None,
 ) -> DataInspectionResult:
     """Inspect, profile, and evaluate the quality of a CSV, Excel, or JSON file.
 
@@ -441,6 +472,8 @@ def scan(
     :type chunksize: int
     :param critical_columns: Optional critical columns subjected to heavy null penalties.
     :type critical_columns: Optional[List[str]]
+    :param column_weights: Optional custom importance weights per column.
+    :type column_weights: Optional[Dict[str, float]]
     :return: Comprehensive DataInspectionResult.
     :rtype: DataInspectionResult
 
@@ -464,7 +497,13 @@ def scan(
         )
 
     df, _ = load_tabular_file(path, sheet_name=sheet_name, delimiter=delimiter)
-    return scan_dataframe(df, source_name=str(path), config=config, critical_columns=critical_columns)
+    return scan_dataframe(
+        df,
+        source_name=str(path),
+        config=config,
+        critical_columns=critical_columns,
+        column_weights=column_weights,
+    )
 
 
 # Self-reference for API compatibility: allows both scan(...) and scan.scan(...)

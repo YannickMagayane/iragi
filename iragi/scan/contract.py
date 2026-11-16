@@ -163,9 +163,67 @@ class DataContract:
         return self
 
 
+def _regex_worker_entrypoint(pattern: str, values: List[str], pipe_conn) -> None:
+    """Module-level entrypoint for cross-platform process-based regex timeout.
+
+    :param pattern: Regular expression pattern string.
+    :type pattern: str
+    :param values: List of string values to validate.
+    :type values: List[str]
+    :param pipe_conn: Multiprocessing connection pipe.
+    """
+    compiled = re.compile(pattern)
+    mismatches = [v for v in values if not compiled.match(v)]
+    pipe_conn.send(len(mismatches))
+
+
+def _run_regex_with_process(
+    pattern: str, values: List[str], timeout_seconds: float, column: str
+) -> int:
+    """Run regex validation inside an isolated process with hard timeout.
+
+    Ensures ReDoS protection functions correctly on platforms without SIGALRM (Windows)
+    or inside non-main threads.
+
+    :param pattern: Regular expression string.
+    :type pattern: str
+    :param values: Column values to inspect.
+    :type values: List[str]
+    :param timeout_seconds: Maximum time allowed before terminating process.
+    :type timeout_seconds: float
+    :param column: Name of target column.
+    :type column: str
+    :return: Count of mismatching rows.
+    :rtype: int
+    :raises TimeoutError: If execution exceeds timeout_seconds.
+    """
+    import multiprocessing as mp
+
+    # Use spawn context for safe cross-platform process isolation (Windows/macOS/Linux)
+    ctx = mp.get_context("spawn")
+    parent_conn, child_conn = ctx.Pipe()
+
+    p = ctx.Process(target=_regex_worker_entrypoint, args=(pattern, values, child_conn))
+    p.start()
+    p.join(timeout=timeout_seconds)
+
+    if p.is_alive():
+        p.terminate()
+        p.join()
+        raise TimeoutError(
+            f"Regex pattern '{pattern}' on column '{column}' exceeded "
+            f"{timeout_seconds}s timeout — possible ReDoS attack."
+        )
+
+    if parent_conn.poll():
+        return int(parent_conn.recv())
+    return 0
+
+
 def validate_contract(
     df: "pd.DataFrame",  # noqa: F821
     contract: DataContract,
+    force_process_timeout: bool = False,
 ) -> List[ContractViolation]:
     """Evaluate a DataContract against a DataFrame and return all violations.
 
@@ -238,11 +296,11 @@ def validate_contract(
             compiled = re.compile(rule.pattern)
             non_null = series.dropna().astype(str)
 
-            # ReDoS protection: use kernel timer to preempt catastrophic backtracking
+            # ReDoS protection: use kernel timer or isolated process fallback
             has_sigalrm = hasattr(signal, "SIGALRM")
             is_main = threading.current_thread() is threading.main_thread()
 
-            if has_sigalrm and is_main and rule.timeout_seconds > 0:
+            if has_sigalrm and is_main and not force_process_timeout and rule.timeout_seconds > 0:
                 def _handle_timeout(signum, frame):
                     raise TimeoutError(
                         f"Regex pattern '{rule.pattern}' on column '{rule.column}' exceeded "
@@ -252,14 +310,21 @@ def validate_contract(
                 old_handler = signal.signal(signal.SIGALRM, _handle_timeout)
                 signal.setitimer(signal.ITIMER_REAL, rule.timeout_seconds)
                 try:
-                    mismatches = non_null[~non_null.str.match(compiled)]
+                    mismatches = [v for v in non_null if not compiled.match(v)]
+                    count = int(len(mismatches))
                 finally:
                     signal.setitimer(signal.ITIMER_REAL, 0)
                     signal.signal(signal.SIGALRM, old_handler)
+
+            elif rule.timeout_seconds > 0 and (not has_sigalrm or force_process_timeout):
+                # Process-based fallback for Windows or non-main threads
+                count = _run_regex_with_process(
+                    rule.pattern, non_null.tolist(), rule.timeout_seconds, rule.column
+                )
             else:
                 mismatches = non_null[~non_null.str.match(compiled)]
+                count = int(len(mismatches))
 
-            count = int(len(mismatches))
             if count > 0:
                 violations.append(ContractViolation(
                     column=rule.column,

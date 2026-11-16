@@ -55,6 +55,94 @@ class ReconciliationResult:
     conflict_columns: Dict[str, int] = field(default_factory=dict)
 
 
+@dataclass
+class MultiReconciliationResult:
+    """Outcome of reconciling multiple DataFrames simultaneously.
+
+    :param all_matched_count: Number of keys present in ALL provided sources.
+    :type all_matched_count: int
+    :param total_unique_keys: Total unique keys across all sources combined.
+    :type total_unique_keys: int
+    :param consensus_match_rate: Proportion of keys shared across all sources.
+    :type consensus_match_rate: float
+    :param orphans_by_source: Count of keys unique to each specific source.
+    :type orphans_by_source: Dict[str, int]
+    :param source_names: Names or labels of reconciled sources.
+    :type source_names: List[str]
+
+    Example:
+        >>> res = MultiReconciliationResult(all_matched_count=5, total_unique_keys=10,
+        ...     consensus_match_rate=0.5, orphans_by_source={"a": 1, "b": 2}, source_names=["a", "b"])
+        >>> res.consensus_match_rate
+        0.5
+    """
+
+    all_matched_count: int
+    total_unique_keys: int
+    consensus_match_rate: float
+    orphans_by_source: Dict[str, int] = field(default_factory=dict)
+    source_names: List[str] = field(default_factory=list)
+
+
+def reconcile_multi(
+    sources: Dict[str, pd.DataFrame],
+    on: Union[str, List[str]],
+) -> MultiReconciliationResult:
+    """Reconcile three or more DataFrames simultaneously by key column(s).
+
+    Computes consensus matches (keys present in every dataset), union of keys,
+    and orphan keys isolated to single sources.
+
+    :param sources: Mapping of source name to target DataFrame.
+    :type sources: Dict[str, pd.DataFrame]
+    :param on: Key column name or list of columns for joining.
+    :type on: Union[str, List[str]]
+    :return: MultiReconciliationResult with consensus match metrics.
+    :rtype: MultiReconciliationResult
+
+    Example:
+        >>> import pandas as pd
+        >>> df1 = pd.DataFrame({"id": [1, 2]})
+        >>> df2 = pd.DataFrame({"id": [2, 3]})
+        >>> df3 = pd.DataFrame({"id": [2, 4]})
+        >>> res = reconcile_multi({"s1": df1, "s2": df2, "s3": df3}, on="id")
+        >>> res.all_matched_count
+        1
+    """
+    if not sources:
+        return MultiReconciliationResult(
+            all_matched_count=0,
+            total_unique_keys=0,
+            consensus_match_rate=1.0,
+            orphans_by_source={},
+            source_names=[],
+        )
+
+    key = [on] if isinstance(on, str) else on
+    key_sets: Dict[str, set] = {}
+
+    for name, df in sources.items():
+        key_sets[name] = set(map(tuple, df[key].values.tolist()))
+
+    all_matched = set.intersection(*key_sets.values()) if key_sets else set()
+    total_unique = set.union(*key_sets.values()) if key_sets else set()
+
+    orphans_by_source: Dict[str, int] = {}
+    for name, kset in key_sets.items():
+        other_keys = set.union(*(s for other_name, s in key_sets.items() if other_name != name))
+        orphans_by_source[name] = len(kset - other_keys)
+
+    consensus_match_rate = round(len(all_matched) / len(total_unique), 4) if total_unique else 1.0
+
+    return MultiReconciliationResult(
+        all_matched_count=len(all_matched),
+        total_unique_keys=len(total_unique),
+        consensus_match_rate=consensus_match_rate,
+        orphans_by_source=orphans_by_source,
+        source_names=list(sources.keys()),
+    )
+
+
 def reconcile(
     df_a: pd.DataFrame,
     df_b: pd.DataFrame,
