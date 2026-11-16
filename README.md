@@ -32,13 +32,22 @@ Engineered for seamless integration into standalone Python scripts, Django appli
 - [Objectives](#objectives)
 - [Key Features](#key-features)
   - [1. iragi.scan — Tabular Quality & Profiling](#1-iragiscan--tabular-quality--profiling)
-  - [2. iragi.pdf — Document Extraction](#2-iragipdf--document-extraction)
-  - [3. iragi.all — Unified Orchestration](#3-iragiall--unified-orchestration)
+  - [2. iragi.pdf — Document Extraction & Streaming](#2-iragipdf--document-extraction--streaming)
+  - [3. iragi.reconcile — Cross-Source Data Reconciliation](#3-iragireconcile--cross-source-data-reconciliation)
+  - [4. iragi.all — Unified Orchestration](#4-iragiall--unified-orchestration)
 - [Installation](#installation)
 - [Quickstart (Python API)](#quickstart-python-api)
   - [Tabular Inspection with Scan](#tabular-inspection-with-scan)
   - [PDF Document Extraction](#pdf-document-extraction)
   - [End-to-End Analysis with All](#end-to-end-analysis-with-all)
+- [Data Contracts — Custom Business Rules](#data-contracts--custom-business-rules)
+- [Multi-Sheet Excel Batch Audit](#multi-sheet-excel-batch-audit)
+- [Large File Support (Chunked Reading)](#large-file-support-chunked-reading)
+- [Deterministic Auto-Remediation & Dead-Letter Quarantine](#deterministic-auto-remediation--dead-letter-quarantine-iragiauto_clean)
+- [Cross-Source Reconciliation & Regex Normalization](#cross-source-reconciliation--regex-normalization-iragireconcile)
+- [Multi-Source Consensus Reconciliation](#multi-source-consensus-reconciliation-iragireconcile_multi)
+- [Bounded-Memory Streaming for Large Files (CSV, Excel, PDF)](#bounded-memory-streaming-for-large-files-csv-excel-pdf)
+- [Data Drift Detection](#data-drift-detection-iragicompare_scans)
 - [Command Line Interface (CLI)](#command-line-interface-cli)
 - [Technology Foundation & Potential](#technology-foundation--potential)
 - [Contributing](#contributing)
@@ -48,11 +57,13 @@ Engineered for seamless integration into standalone Python scripts, Django appli
 
 ## Objectives
 
-Iragi simplifies three critical operations across modern software and data platforms:
+Iragi simplifies critical operations across modern software and data platforms:
 
-1. **Inspect structured files** to immediately understand schema, data distributions, missing rates, and anomalies.
+1. **Inspect structured files** (CSV, Excel, JSON, Parquet) to immediately understand schema, data distributions, missing rates, and anomalies.
 2. **Extract content from complex PDF documents**, including raw text, structural metadata, and embedded tabular grids.
-3. **Chain extraction and quality profiling** seamlessly into an automated pipeline yielding coherent, explainable quality scores and JSON/HTML reports.
+3. **Cross-source reconciliation** between disparate datasets with regex-based key normalization and consensus tracking.
+4. **Deterministic remediation and dead-letter quarantine (DLQ)** without altering source files or blindly imputing financial equations.
+5. **Chain extraction, quality profiling, and streaming** into an automated pipeline with strictly bounded memory (O(1)).
 
 ---
 
@@ -60,31 +71,33 @@ Iragi simplifies three critical operations across modern software and data platf
 
 ### 1. `iragi.scan` — Tabular Quality & Profiling
 
-Inspects CSV, Excel, and JSON datasets without destructive mutations:
+Inspects CSV, Excel (.xlsx, .xls), JSON, and Apache Parquet (.parquet, .pq) datasets without destructive mutations:
 - **Format detection:** Auto-detection of delimiters, encodings, and spreadsheet sheets.
 - **Column profiling:** Automated type inference (numeric, categorical, datetime, text), uniqueness, and cardinality metrics.
 - **Completeness & Hygiene checks:** Missing value rates, null indicators, whitespace issues, and duplicate row detection.
 - **Statistical anomaly detection:** Configurable Interquartile Range (IQR) and **Modified Z-Score** (median-based MAD) outlier detection — avoiding false positives on skewed or Pareto-distributed data.
-- **Explainable Quality Score (0–100):** Transparent penalty breakdown across missing data, duplicates, outliers, empty columns, and critical columns (anti-dilution).
-- **Data Contracts:** Declare and enforce custom business rules per column (`not_null`, `positive`, `range`, `regex` with **ReDoS timeout protection**).
-- **Auto-Remediation (`auto_clean`):** Automatically cleans DataFrames (deduplication, smart numeric mean/median imputation, categorical mode imputation) without modifying original files.
-- **Drift Detection (`compare_scans`):** Compares snapshots across time to highlight score degradation, schema changes, and drifting columns.
-- **True Streaming (`scan_csv_stream` / `iter_csv_chunks`):** One-pass streaming inspection for multi-gigabyte CSVs with strictly bounded memory (O(chunksize)).
-- **Enterprise Security:** CSV Formula Injection sanitization (`sanitize_formulas=True`) and decompression Zip Bomb defense on Excel workbooks.
+- **Explainable Quality Score (0–100):** Transparent penalty breakdown across missing data, duplicates, outliers, empty columns, critical column anti-dilution, and customizable `column_weights`.
+- **Data Contracts:** Declare and enforce custom business rules per column (`not_null`, `positive`, `range`, `regex` with cross-platform **ReDoS timeout protection**).
+- **Deterministic Auto-Remediation (`auto_clean`):** Applies deduplication, fuzzy string deduplication (`fuzzy_dedup=True`), formula-based deterministic calculations (`computed_columns`), per-column imputation strategies (`impute_strategies`), and sensitive column exclusion (`exclude_columns`).
+- **Dead-Letter Queue Quarantine (DLQ):** When coupled with a `DataContract`, `auto_clean` isolates violating records into a dedicated `quarantine_df` while returning cleaned data in `df`.
+- **True Streaming (`scan_csv_stream`, `scan_excel_stream`, `iter_excel_chunks`):** One-pass streaming inspection for multi-gigabyte CSV and Excel files with strictly bounded memory (O(chunksize)).
+- **Enterprise Security:** CSV Formula Injection sanitization (`sanitize_formulas=True`), XML entity expansion defense (Billion Laughs), and decompression Zip Bomb defense on Excel workbooks.
 
-### 2. `iragi.pdf` — Document Extraction
+### 2. `iragi.pdf` — Document Extraction & Streaming
 
 High-throughput text and table extraction from digital or scanned PDF files:
 - **Fast text extraction:** Powered by PyMuPDF for lightning-fast character and page parsing.
 - **Metadata parsing:** Title, author, creation dates, page counts, and security flags.
 - **Table reconstruction:** Integration with `pdfplumber` to transform document tables into Pandas DataFrames.
 - **Scanned page detection:** Predictive heuristic rules detecting when OCR (Tesseract / Pillow) is required.
+- **Memory-bounded PDF Streaming (`iter_pdf_pages`, `extract_tables_stream`):** Page-by-page generator processing preventing memory exhaustion on 1,000+ page documents.
 
 ### 3. `iragi.reconcile` — Cross-Source Data Reconciliation
 
 Join-based reconciliation engine across heterogeneous data sources:
-- **Cross-file matching:** Reconciles records between CSV, Excel, or extracted PDF tables on arbitrary keys.
-- **Orphan identification:** Isolates records present in source A but missing from source B, and vice-versa.
+- **Heterogeneous key matching:** Reconcile across different column names via tuple syntax `on=("order_id", "facture_id")`.
+- **Key Normalization & Regex (`key_transform`):** Cleanly strip varying prefixes (e.g. `TRX-101` vs `FACT_101`) using regex patterns like `r"(\d+)"` or custom callables.
+- **Consensus Multi-Reconciliation (`reconcile_multi`):** Reconcile 3 or more datasets simultaneously, computing shared consensus keys and source-specific orphan counts.
 - **Value conflict detection:** Identifies field-by-field discrepancies between matched records.
 - **Match Rate:** Computes definitive reconciliation coverage percentage.
 
@@ -219,49 +232,125 @@ print(f"Detected delimiter: {df.attrs.get('delimiter')}")
 
 ---
 
-## Cross-Source Data Reconciliation (`iragi.reconcile`)
+## Deterministic Auto-Remediation & Dead-Letter Quarantine (`iragi.auto_clean`)
 
-Reconcile records across disparate sources (e.g. CSV vs Excel or extracted PDF tables):
+Standard statistical imputation (e.g. blind mean) can corrupt business logic like `net_amount = (unit_price * qty) * (1 - discount) + shipping`. Iragi provides **deterministic formula rules**, **sensitive column exemptions**, and **dead-letter queue (DLQ) quarantine** for contract violations:
 
 ```python
 import iragi
 import pandas as pd
 
-df_csv = pd.read_csv("orders_crm.csv")
-df_excel = pd.read_excel("invoices_erp.xlsx")
+raw_df = pd.read_csv("transactions.csv")
 
-# Match on 'order_id' and cross-check 'total_amount'
-result = iragi.reconcile(df_csv, df_excel, on="order_id", compare_columns=["total_amount"])
+# 1. Enforce business contract rules
+contract = (
+    iragi.DataContract()
+    .require_positive("net_amount")
+    .require_regex("status", r"^(PAID|FAILED)$")
+)
 
-print(f"Match Rate: {result.match_rate * 100:.2f}%")
-print(f"Matched records: {result.matched_count}")
-print(f"Orphans in CRM only: {result.orphan_a_count}")
-print(f"Orphans in ERP only: {result.orphan_b_count}")
-print(f"Value conflicts on 'total_amount': {result.conflict_columns.get('total_amount', 0)}")
+# 2. Remediation with business formulas & dead-letter queue
+clean_res = iragi.auto_clean(
+    raw_df,
+    drop_duplicates=True,
+    fuzzy_dedup=True,
+    fuzzy_columns=["customer_name"],
+    # Deterministic equation replaces blind statistical guessing
+    computed_columns={
+        "net_amount": lambda d: (d["unit_price"] * d["qty"]) * (1.0 - d["discount"]) + d["shipping"]
+    },
+    exclude_columns=["sensitive_id"],
+    contract=contract,
+    contract_action="quarantine",  # isolates corrupt rows in DLQ instead of corrupting data
+)
+
+clean_df = clean_res.df
+dlq_df = clean_res.quarantine_df
+
+print(f"Clean records ready for analytics: {len(clean_df)}")
+print(f"Corrupt records quarantined in DLQ: {len(dlq_df)}")
+print(f"Duplicates removed: {clean_res.changes.get('duplicates_removed', 0)}")
+print(f"Fuzzy duplicates removed: {clean_res.changes.get('fuzzy_duplicates_removed', 0)}")
 ```
 
 ---
 
-## Auto-Remediation & Data Cleaning (`iragi.auto_clean`)
+## Cross-Source Reconciliation & Regex Normalization (`iragi.reconcile`)
 
-Remediate quality defects without mutating original files:
+Reconcile records across disparate sources even when systems use different column names or sequence prefixes (e.g. Sales uses `TRX-101`, Finance uses `FACT_101`):
 
 ```python
 import iragi
 import pandas as pd
 
-raw_df = pd.read_csv("messy_data.csv")
+df_sales = pd.read_csv("sales.csv")          # column: order_id ('TRX-101')
+df_finance = pd.read_excel("finance.xlsx")   # column: invoice_id ('FACT_101')
 
-clean_res = iragi.auto_clean(
-    raw_df,
-    drop_duplicates=True,
-    impute_numeric="mean",       # or "median"
-    impute_categorical="mode",
+# Match with regex normalization to extract core sequence numbers
+result = iragi.reconcile(
+    df_sales,
+    df_finance,
+    on=("order_id", "invoice_id"),
+    key_transform=r"(\d+)",
+    compare_columns=["amount"],
 )
 
-cleaned_df = clean_res.df
-print(f"Duplicates removed: {clean_res.changes['duplicates_removed']}")
-print(f"Null cells imputed: {clean_res.changes['nulls_imputed']}")
+print(f"Match Rate: {result.match_rate * 100:.2f}%")
+print(f"Matched records: {result.matched_count}")
+print(f"Orphans in Sales only: {result.orphan_a_count}")
+print(f"Orphans in Finance only: {result.orphan_b_count}")
+print(f"Amount conflicts: {result.conflict_columns.get('amount', 0)}")
+```
+
+---
+
+## Multi-Source Consensus Reconciliation (`iragi.reconcile_multi`)
+
+Audit consensus across 3 or more systems (e.g. Sales vs Logistics vs Accounting):
+
+```python
+import iragi
+
+res = iragi.reconcile_multi(
+    {"sales": df_sales, "logistics": df_logistics, "finance": df_finance},
+    on="reference_id",
+    key_transform=lambda k: "".join(filter(str.isdigit, str(k))),
+)
+
+print(f"Consensus matched across all 3 systems: {res.all_matched_count}")
+print(f"Total unique keys: {res.total_unique_keys}")
+print(f"Consensus match rate: {res.consensus_match_rate * 100:.2f}%")
+print(f"Orphans by source: {res.orphans_by_source}")
+```
+
+---
+
+## Bounded-Memory Streaming for Large Files (CSV, Excel, PDF)
+
+Never crash from Out-Of-Memory (OOM) errors. Iragi profiles and streams large files in O(1) bounded memory:
+
+```python
+import iragi
+from iragi.scan import scan_csv_stream, scan_excel_stream, iter_excel_chunks
+from iragi.pdf import iter_pdf_pages, extract_tables_stream
+
+# 1. Stream massive CSV (50 GB+) in 50,000 row chunks
+res_csv = scan_csv_stream("large_data.csv", chunksize=50_000)
+print(f"CSV score: {res_csv.quality_score.total_score:.1f}/100")
+
+# 2. Stream massive multi-sheet Excel (300 MB+) without memory spikes
+res_excel = scan_excel_stream("large_workbook.xlsx", sheet_name="01_Ventes", chunksize=25_000)
+print(f"Excel score: {res_excel.quality_score.total_score:.1f}/100")
+
+# 3. Stream multi-thousand page PDF page-by-page
+for page in iter_pdf_pages("huge_report.pdf", batch_size=10):
+    if page.is_scanned:
+        print(f"Page {page.page_number} requires OCR")
+
+# 4. Stream tables from PDF on the fly
+for table in extract_tables_stream("huge_report.pdf"):
+    df_chunk = table.to_dataframe()
+    # Process or load table to warehouse immediately
 ```
 
 ---
@@ -282,22 +371,6 @@ print(f"Quality delta: {drift.score_delta:+.2f} pts")
 print(f"Missing count delta: {drift.missing_delta:+d}")
 print(f"Drifted columns: {drift.drifted_columns}")
 print(f"Summary: {drift.summary}")
-```
-
----
-
-## True Streaming Scan for Big Data (`iragi.scan_csv_stream`)
-
-Inspect files of any size (even 50 GB+) with strictly bounded RAM:
-
-```python
-import iragi
-
-# Bounded memory: processes in 50,000 row chunks, never loading the whole dataset
-result = iragi.scan_csv_stream("massive_dataset.csv", chunksize=50_000)
-
-print(f"Rows: {result.row_count}, Columns: {result.column_count}")
-print(f"Score: {result.quality_score.total_score:.1f}/100")
 ```
 
 ---

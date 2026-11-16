@@ -32,14 +32,20 @@ L'objectif est de fournir une bibliothèque réutilisable dans des scripts Pytho
 - [Objectifs](#objectifs)
 - [Fonctionnalités](#fonctionnalités)
   - [1. iragi.scan — Inspection et qualité](#1-iragiscan--inspection-et-qualité-des-fichiers)
-  - [2. iragi.pdf — Extraction de documents PDF](#2-iragipdf--extraction-de-documents-pdf)
-  - [3. iragi.all — Orchestration et pipeline](#3-iragiall--orchestration-des-moteurs)
+  - [2. iragi.pdf — Extraction documentaire & streaming](#2-iragipdf--extraction-de-documents-pdf)
+  - [3. iragi.reconcile — Réconciliation et rapprochement inter-sources](#3-iragireconcile--réconciliation-et-rapprochement-inter-sources)
+  - [4. iragi.all — Orchestration et pipeline](#4-iragiall--orchestration-des-moteurs)
 - [Architecture modulaire](#architecture-modulaire)
 - [Installation](#installation)
 - [Utilisation en Python](#utilisation-en-python)
   - [Inspection avec Scan](#inspection-dun-fichier-avec-scan)
   - [Extraction PDF](#extraction-dun-pdf)
   - [Pipeline unifié avec All](#analyse-combinée-avec-all)
+- [Contrats de données — Règles métier & anti-ReDoS](#contrats-de-données--règles-métier-et-protection-anti-redos)
+- [Remédiation déterministe & File de rejet (DLQ)](#remédiation-déterministe--file-de-rejet-dlq-iragiauto_clean)
+- [Réconciliation inter-sources & normalisation Regex](#réconciliation-inter-sources--normalisation-regex-iragireconcile)
+- [Réconciliation multi-sources par consensus](#réconciliation-multi-sources-par-consensus-iragireconcile_multi)
+- [Streaming mémoire bornée pour gros fichiers (CSV, Excel, PDF)](#streaming-mémoire-bornée-pour-gros-fichiers-csv-excel-pdf)
 - [Interface CLI](#interface-cli)
 - [Rapports](#rapports)
 - [Documentation Sphinx](#documentation-sphinx)
@@ -216,6 +222,151 @@ result = analyze("factures_q3.pdf")
 print("Score de qualité global :", result.quality_report.quality_score.total_score)
 print("Données tabulaires extraites :", len(result.extracted_data.tables))
 print("Anomalies détectées :", result.quality_report.potential_outliers_count)
+```
+
+---
+
+## Contrats de données — Règles métier et protection anti-ReDoS
+
+Déclarez et appliquez des règles strictes sur vos colonnes (présence, positivité, intervalle numérique ou conformité d'expression régulière avec coupe-circuit anti-ReDoS) :
+
+```python
+import iragi
+import pandas as pd
+
+df = pd.read_csv("factures.csv")
+
+contract = (
+    iragi.DataContract()
+    .require_not_null("reference_facture")
+    .require_positive("montant_ht")
+    .require_range("taux_tva", min_val=0, max_val=100)
+    .require_regex("email_contact", r"^[^@]+@[^@]+\.[^@]+$")
+)
+
+violations = iragi.validate_contract(df, contract)
+for v in violations:
+    print(f"[{v.rule}] Colonne '{v.column}' : {v.detail} ({v.failed_count} lignes en anomalie)")
+```
+
+---
+
+## Remédiation déterministe & File de rejet (DLQ) (`iragi.auto_clean`)
+
+L'imputation statistique aveugle (remplacer les vides par la moyenne) altère gravement les données financières calculées (`Montant_Net = (Prix * Unites) * (1 - Remise) + Frais`). Iragi propose des formules de calcul déterministes et isole les violations de contrat dans une file de rejet (**Dead-Letter Queue**) :
+
+```python
+import iragi
+import pandas as pd
+
+df = pd.read_csv("commandes.csv")
+
+contract = (
+    iragi.DataContract()
+    .require_positive("montant_net")
+    .require_regex("statut", r"^(PAYE|ECHOUE)$")
+)
+
+res = iragi.auto_clean(
+    df,
+    drop_duplicates=True,
+    fuzzy_dedup=True,
+    fuzzy_columns=["client"],
+    # Formule mathématique exacte au lieu d'une moyenne statistique aveugle
+    computed_columns={
+        "montant_net": lambda d: (d["prix_unitaire"] * d["unites"]) * (1.0 - d["remise"]) + d["frais_port"]
+    },
+    exclude_columns=["id_confidentiel"],
+    contract=contract,
+    contract_action="quarantine",  # Isole les anomalies dans la Dead-Letter Queue
+)
+
+clean_df = res.df
+dlq_df = res.quarantine_df
+
+print(f"Lignes saines validées : {len(clean_df)}")
+print(f"Lignes corrompues isolées en DLQ : {len(dlq_df)}")
+print("Audit des modifications :", res.changes)
+```
+
+---
+
+## Réconciliation inter-sources & normalisation Regex (`iragi.reconcile`)
+
+Rapprochez des données provenant de deux systèmes différents même si les colonnes portent des noms distincts ou comportent des préfixes hétérogènes (`TRX-101` côté Ventes vs `FACT_101` côté Finance) :
+
+```python
+import iragi
+import pandas as pd
+
+df_ventes = pd.read_csv("ventes.csv")
+df_finance = pd.read_excel("finance.xlsx")
+
+# Rapprochement avec normalisation Regex pour isoler le numéro de séquence
+result = iragi.reconcile(
+    df_ventes,
+    df_finance,
+    on=("numero_commande", "reference_facture"),
+    key_transform=r"(\d+)",
+    compare_columns=["montant"],
+)
+
+print(f"Taux de rapprochement : {result.match_rate * 100:.2f}%")
+print(f"Enregistrements appariés : {result.matched_count}")
+print(f"Orphelins Ventes uniquement : {result.orphan_a_count}")
+print(f"Orphelins Finance uniquement : {result.orphan_b_count}")
+print(f"Écarts de montants constatés : {result.conflict_columns.get('montant', 0)}")
+```
+
+---
+
+## Réconciliation multi-sources par consensus (`iragi.reconcile_multi`)
+
+Croisez 3 sources ou plus simultanément pour mesurer le consensus global :
+
+```python
+import iragi
+
+res = iragi.reconcile_multi(
+    {"ventes": df_ventes, "logistique": df_logistique, "comptabilite": df_compta},
+    on="id_reference",
+    key_transform=lambda k: "".join(filter(str.isdigit, str(k))),
+)
+
+print(f"Clés validées en consensus complet : {res.all_matched_count}")
+print(f"Total des clés uniques : {res.total_unique_keys}")
+print(f"Taux de consensus : {res.consensus_match_rate * 100:.2f}%")
+print(f"Orphelins par système : {res.orphans_by_source}")
+```
+
+---
+
+## Streaming mémoire bornée pour gros fichiers (CSV, Excel, PDF)
+
+Éliminez définitivement le risque de saturation mémoire (OOM) lors du traitement de fichiers volumineux :
+
+```python
+import iragi
+from iragi.scan import scan_csv_stream, scan_excel_stream
+from iragi.pdf import iter_pdf_pages, extract_tables_stream
+
+# 1. Audit en streaming d'un CSV géant (50 Go+) par blocs de 50 000 lignes
+res_csv = scan_csv_stream("gros_fichier.csv", chunksize=50_000)
+print(f"Score CSV : {res_csv.quality_score.total_score:.1f}/100")
+
+# 2. Audit d'un classeur Excel volumineux sans gonfler la RAM (mode streaming read_only)
+res_excel = scan_excel_stream("classeur_lourd.xlsx", sheet_name="01_Ventes", chunksize=25_000)
+print(f"Score Excel : {res_excel.quality_score.total_score:.1f}/100")
+
+# 3. Parcours page par page d'un PDF de plusieurs milliers de pages
+for page in iter_pdf_pages("document_volumineux.pdf", batch_size=10):
+    if page.is_scanned:
+        print(f"Page {page.page_number} identifiée comme scan papier")
+
+# 4. Extraction de tableaux PDF en flux continu (générateur)
+for table in extract_tables_stream("document_volumineux.pdf"):
+    df_table = table.to_dataframe()
+    # Ingestion immédiate dans la base de données
 ```
 
 ---
