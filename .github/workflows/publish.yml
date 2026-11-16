@@ -39,6 +39,7 @@ jobs:
         run: |
           mkdir -p docs/source/api docs/source/_static docs/source/_templates
           cp README.md docs/source/readme.md
+          [ -f README.fr.md ] && cp README.fr.md docs/source/readme_fr.md
           sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi
           sphinx-build -b html docs/source docs/build/html
 

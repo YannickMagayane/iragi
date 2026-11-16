@@ -65,6 +65,9 @@ mkdir -p docs/source/api docs/source/_static docs/source/_templates docs/build/h
 if [ -f "README.md" ]; then
     cp README.md docs/source/readme.md
 fi
+if [ -f "README.fr.md" ]; then
+    cp README.fr.md docs/source/readme_fr.md
+fi
 
 DOCS_CMD='mkdir -p docs/source/api docs/source/_static docs/source/_templates && \
 sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi iragi/*/migrations iragi/theme/static_src && \

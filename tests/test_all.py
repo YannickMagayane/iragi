@@ -10,7 +10,7 @@ Example:
 import tempfile
 from pathlib import Path
 import pytest
-import pymupdf as fitz
+fitz = pytest.importorskip("pymupdf", reason="PyMuPDF is required for PDF tests")
 from iragi.all import analyze, batch_analyze, UnifiedAnalysisResult
 from iragi.core.exceptions import IragiDataError
 
