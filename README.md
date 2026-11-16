@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/YannickMagayane/iragi"><img src="https://img.shields.io/badge/GitHub-YannickMagayane%2Firagi-181717?style=flat&logo=github&logoColor=white" alt="GitHub Repository"></a>
+  <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/v/iragi?color=green&label=PyPI" alt="PyPI Package"></a>
   <a href="#objectives"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
-  <a href="#installation"><img src="https://img.shields.io/badge/Version-0.2.0-green.svg" alt="Version 0.2.0"></a>
   <a href="#license"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
-  <a href="#documentation"><img src="https://img.shields.io/badge/Docs-Sphinx-orange.svg" alt="Sphinx Docs"></a>
-  <a href="#modular-architecture"><img src="https://img.shields.io/badge/Architecture-Modular-purple.svg" alt="Modular Architecture"></a>
+  <a href="http://localhost:8000/"><img src="https://img.shields.io/badge/Docs-Sphinx-orange.svg" alt="Sphinx Docs"></a>
 </p>
 
 ---

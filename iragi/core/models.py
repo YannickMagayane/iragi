@@ -71,6 +71,7 @@ class ColumnProfile:
     unique_count: int
     invalid_dates_count: int = 0
     outliers_count: int = 0
+    type_mismatches_count: int = 0
     summary_stats: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -123,6 +124,7 @@ class DataInspectionResult:
     column_profiles: List[ColumnProfile] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
     delimiter: Optional[str] = None
+    encoding: Optional[str] = None
     sheet_names: Optional[List[str]] = None
     analyzed_at: datetime = field(default_factory=datetime.now)
 

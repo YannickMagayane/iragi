@@ -53,6 +53,8 @@ class UnifiedAnalysisResult:
     tabular_inspections: List[DataInspectionResult] = field(default_factory=list)
     overall_quality_score: float = 100.0
     recommendations: List[str] = field(default_factory=list)
+    success: bool = True
+    error: Optional[str] = None
     analyzed_at: datetime = field(default_factory=datetime.now)
 
     def summary(self) -> Dict[str, Any]:
@@ -70,6 +72,8 @@ class UnifiedAnalysisResult:
         return {
             "file_path": self.file_path,
             "file_type": self.file_type,
+            "success": self.success,
+            "error": self.error,
             "overall_quality_score": self.overall_quality_score,
             "tables_audited": len(self.tabular_inspections),
             "recommendations_count": len(self.recommendations),
@@ -162,8 +166,12 @@ def batch_analyze(
     target_path: Union[str, Path, List[Union[str, Path]]],
     recursive: bool = False,
     enable_ocr: bool = False,
+    raise_on_error: bool = False,
 ) -> List[UnifiedAnalysisResult]:
     """Execute analysis across a batch list of files or directory path.
+
+    Records explicit failure results if individual files fail during batch ingestion,
+    preventing silent data drops while allowing batch workflows to continue.
 
     :param target_path: Directory path or list of individual file paths.
     :type target_path: Union[str, Path, List[Union[str, Path]]]
@@ -171,11 +179,14 @@ def batch_analyze(
     :type recursive: bool
     :param enable_ocr: Whether to run OCR for detected scanned PDF pages.
     :type enable_ocr: bool
-    :return: List of UnifiedAnalysisResult objects.
+    :param raise_on_error: If True, raise exception on first error instead of logging it in results.
+    :type raise_on_error: bool
+    :return: List of UnifiedAnalysisResult objects (including explicit error entries).
     :rtype: List[UnifiedAnalysisResult]
 
     Example:
-        >>> # results = batch_analyze(["data1.csv", "data2.csv"])
+        >>> # results = batch_analyze(["data1.csv", "corrupted.csv"])
+        >>> # assert results[1].success is False
     """
     files_to_process: List[Path] = []
 
@@ -197,8 +208,18 @@ def batch_analyze(
         try:
             res = analyze(file_item, enable_ocr=enable_ocr)
             results.append(res)
-        except Exception:
-            # Continue batch execution on individual file failures
-            continue
+        except Exception as exc:
+            if raise_on_error:
+                raise
+            error_res = UnifiedAnalysisResult(
+                file_path=str(file_item),
+                file_type=file_item.suffix.lower().lstrip("."),
+                overall_quality_score=0.0,
+                success=False,
+                error=str(exc),
+                recommendations=[f"Analysis failed: {exc}"],
+                analyzed_at=datetime.now(),
+            )
+            results.append(error_res)
 
     return results

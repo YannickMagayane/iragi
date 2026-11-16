@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="#objectifs"><img src="https://img.shields.io/badge/Python-3.14%2B-blue.svg" alt="Python 3.14+"></a>
-  <a href="#installation"><img src="https://img.shields.io/badge/Version-0.2.0-green.svg" alt="Version 0.1.0"></a>
+  <a href="https://github.com/YannickMagayane/iragi"><img src="https://img.shields.io/badge/GitHub-YannickMagayane%2Firagi-181717?style=flat&logo=github&logoColor=white" alt="Dépôt GitHub"></a>
+  <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/v/iragi?color=green&label=PyPI" alt="Paquet PyPI"></a>
+  <a href="#objectifs"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
   <a href="#licence"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="Licence MIT"></a>
-  <a href="#documentation"><img src="https://img.shields.io/badge/Docs-Sphinx-orange.svg" alt="Documentation Sphinx"></a>
-  <a href="#architecture-modulaire"><img src="https://img.shields.io/badge/Architecture-Modular-purple.svg" alt="Architecture modulaire"></a>
+  <a href="http://localhost:8000/"><img src="https://img.shields.io/badge/Docs-Sphinx-orange.svg" alt="Documentation Sphinx"></a>
 </p>
 
 ---

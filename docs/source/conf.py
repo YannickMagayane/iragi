@@ -10,14 +10,16 @@ import sys
 sys.path.insert(0, os.path.abspath("../.."))
 sys.path.insert(0, os.path.abspath("../../iragi"))
 
+import iragi
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "Iragi"
-copyright = "2026, Iragi Contributors"
-author = "Iragi Contributors"
-release = "0.1.0"
-version = "0.1.0"
+copyright = "2026, Yannick Magayane"
+author = "Yannick Magayane"
+release = getattr(iragi, "__version__", "0.2.0")
+version = release
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -67,4 +69,20 @@ autodoc_default_options = {
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
-html_title = "Iragi Documentation"
+html_title = f"Iragi {release} Documentation"
+
+# GitHub integration for RTD theme
+html_context = {
+    "display_github": True,
+    "github_user": "YannickMagayane",
+    "github_repo": "iragi",
+    "github_version": "main",
+    "conf_py_path": "/docs/source/",
+}
+
+html_theme_options = {
+    "display_version": True,
+    "prev_next_buttons_location": "bottom",
+    "style_external_links": True,
+    "vcs_pageview_mode": "blob",
+}
