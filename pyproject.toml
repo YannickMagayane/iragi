@@ -33,10 +33,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/YannickMagayane/iragi"
-Documentation = "https://yannickmagayane.github.io/iragi/"
-Repository = "https://github.com/YannickMagayane/iragi"
-Issues = "https://github.com/YannickMagayane/iragi/issues"
+Documentation = "https://pypi.org/project/iragi/#description"
 
 [project.optional-dependencies]
 pdf = [
