@@ -37,7 +37,7 @@ Homepage = "https://github.com/YannickMagayane/iragi"
 Repository = "https://github.com/YannickMagayane/iragi"
 "Source Code" = "https://github.com/YannickMagayane/iragi"
 "Issue Tracker" = "https://github.com/YannickMagayane/iragi/issues"
-Documentation = "https://github.com/YannickMagayane/iragi#readme"
+Documentation = "https://github.com/YannickMagayane/iragi/tree/main/docs/source"
 
 [project.optional-dependencies]
 pdf = [
