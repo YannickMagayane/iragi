@@ -15,9 +15,10 @@ Example:
 """
 
 from iragi.scan.engine import scan, scan_dataframe, compute_quality_score, generate_recommendations
-from iragi.scan.readers import load_tabular_file, read_csv_file, read_excel_file, read_json_file
+from iragi.scan.readers import load_tabular_file, read_csv_file, read_excel_file, read_json_file, read_csv_chunked
 from iragi.scan.profiler import profile_dataframe, infer_column_type, detect_outliers_iqr
 from iragi.scan.reports import to_json_report, inspection_result_to_dict
+from iragi.scan.contract import DataContract, ContractViolation, validate_contract
 
 __all__ = [
     "scan",
@@ -26,6 +27,7 @@ __all__ = [
     "generate_recommendations",
     "load_tabular_file",
     "read_csv_file",
+    "read_csv_chunked",
     "read_excel_file",
     "read_json_file",
     "profile_dataframe",
@@ -33,4 +35,7 @@ __all__ = [
     "detect_outliers_iqr",
     "to_json_report",
     "inspection_result_to_dict",
+    "DataContract",
+    "ContractViolation",
+    "validate_contract",
 ]

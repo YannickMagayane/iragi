@@ -162,16 +162,71 @@ def analyze(
     raise IragiDataError(f"Unsupported file format '{suffix}' for unified analysis.")
 
 
+def _analyze_excel_all_sheets(
+    path: Path,
+    enable_ocr: bool,
+) -> List["UnifiedAnalysisResult"]:
+    """Analyze every sheet of an Excel workbook independently.
+
+    :param path: Path to the Excel file.
+    :type path: Path
+    :param enable_ocr: Unused for Excel; kept for signature consistency.
+    :type enable_ocr: bool
+    :return: One UnifiedAnalysisResult per sheet.
+    :rtype: List[UnifiedAnalysisResult]
+
+    Example:
+        >>> results = _analyze_excel_all_sheets(Path("workbook.xlsx"), enable_ocr=False)
+        >>> len(results)  # equals number of sheets in the workbook
+        3
+    """
+    from iragi.scan.readers import read_excel_file
+
+    sheet_results: List[UnifiedAnalysisResult] = []
+    probe_df = read_excel_file(path, sheet_name=0)
+    sheet_names = probe_df.attrs.get("sheet_names", [path.stem])
+
+    for sheet in sheet_names:
+        try:
+            df = read_excel_file(path, sheet_name=sheet)
+            inspection = scan_dataframe(df, source_name=f"{path} [Sheet: {sheet}]")
+            sheet_results.append(UnifiedAnalysisResult(
+                file_path=f"{path} [Sheet: {sheet}]",
+                file_type="excel",
+                document=None,
+                tabular_inspections=[inspection],
+                overall_quality_score=inspection.quality_score.total_score,
+                recommendations=inspection.recommendations,
+                analyzed_at=datetime.now(),
+            ))
+        except Exception as exc:
+            sheet_results.append(UnifiedAnalysisResult(
+                file_path=f"{path} [Sheet: {sheet}]",
+                file_type="excel",
+                overall_quality_score=0.0,
+                success=False,
+                error=str(exc),
+                recommendations=[f"Sheet '{sheet}' analysis failed: {exc}"],
+                analyzed_at=datetime.now(),
+            ))
+
+    return sheet_results
+
+
 def batch_analyze(
     target_path: Union[str, Path, List[Union[str, Path]]],
     recursive: bool = False,
     enable_ocr: bool = False,
     raise_on_error: bool = False,
+    excel_all_sheets: bool = False,
 ) -> List[UnifiedAnalysisResult]:
     """Execute analysis across a batch list of files or directory path.
 
     Records explicit failure results if individual files fail during batch ingestion,
     preventing silent data drops while allowing batch workflows to continue.
+
+    When ``excel_all_sheets=True``, each sheet of every Excel workbook in the
+    batch is analyzed independently, producing one result per sheet.
 
     :param target_path: Directory path or list of individual file paths.
     :type target_path: Union[str, Path, List[Union[str, Path]]]
@@ -181,12 +236,16 @@ def batch_analyze(
     :type enable_ocr: bool
     :param raise_on_error: If True, raise exception on first error instead of logging it in results.
     :type raise_on_error: bool
+    :param excel_all_sheets: If True, analyze every sheet of Excel workbooks independently.
+    :type excel_all_sheets: bool
     :return: List of UnifiedAnalysisResult objects (including explicit error entries).
     :rtype: List[UnifiedAnalysisResult]
 
     Example:
         >>> # results = batch_analyze(["data1.csv", "corrupted.csv"])
         >>> # assert results[1].success is False
+        >>> # results = batch_analyze(["report.xlsx"], excel_all_sheets=True)
+        >>> # assert len(results) == number_of_sheets
     """
     files_to_process: List[Path] = []
 
@@ -206,8 +265,11 @@ def batch_analyze(
     results: List[UnifiedAnalysisResult] = []
     for file_item in files_to_process:
         try:
-            res = analyze(file_item, enable_ocr=enable_ocr)
-            results.append(res)
+            if excel_all_sheets and file_item.suffix.lower() in {".xlsx", ".xls", ".xlsm"}:
+                results.extend(_analyze_excel_all_sheets(file_item, enable_ocr=enable_ocr))
+            else:
+                res = analyze(file_item, enable_ocr=enable_ocr)
+                results.append(res)
         except Exception as exc:
             if raise_on_error:
                 raise

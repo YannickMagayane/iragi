@@ -151,6 +151,60 @@ def read_json_file(file_path: Union[str, Path]) -> pd.DataFrame:
         raise IragiDataError(f"Failed to read JSON data from '{path}': {exc}") from exc
 
 
+def read_csv_chunked(
+    file_path: Union[str, Path],
+    chunksize: int = 50_000,
+    delimiter: Optional[str] = None,
+) -> pd.DataFrame:
+    """Read a large CSV file in chunks and assemble into a single DataFrame.
+
+    Avoids loading the entire file into memory at once. Automatically infers
+    delimiter and BOM encoding. Exposes detected delimiter via DataFrame.attrs.
+
+    :param file_path: Path to the CSV file.
+    :type file_path: Union[str, Path]
+    :param chunksize: Number of rows per chunk (default: 50 000).
+    :type chunksize: int
+    :param delimiter: Optional explicit delimiter; inferred when omitted.
+    :type delimiter: Optional[str]
+    :return: Assembled DataFrame with attrs['delimiter'] populated.
+    :rtype: pd.DataFrame
+    :raises IragiDataError: If the file cannot be read.
+
+    Example:
+        >>> import tempfile
+        >>> tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        >>> _ = tmp.write("x,y\\n1,2\\n3,4")
+        >>> tmp.close()
+        >>> df = read_csv_chunked(tmp.name, chunksize=1)
+        >>> len(df)
+        2
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"File not found: {path}")
+
+    # Probe delimiter using first chunk read (small sample)
+    probe = read_csv_file(path, delimiter=delimiter)
+    detected_delimiter = probe.attrs.get("delimiter", ",")
+    detected_encoding = probe.attrs.get("encoding", "utf-8-sig")
+
+    try:
+        chunks = pd.read_csv(
+            path,
+            sep=detected_delimiter,
+            encoding=detected_encoding,
+            chunksize=chunksize,
+            engine="python",
+        )
+        df = pd.concat(list(chunks), ignore_index=True)
+        df.attrs["delimiter"] = detected_delimiter
+        df.attrs["encoding"] = detected_encoding
+        return df
+    except Exception as exc:
+        raise IragiDataError(f"Failed to read CSV in chunks from '{path}': {exc}") from exc
+
+
 def load_tabular_file(
     file_path: Union[str, Path],
     sheet_name: Optional[Union[str, int]] = 0,
