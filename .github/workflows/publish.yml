@@ -1,0 +1,74 @@
+name: Publish to PyPI & Documentation Build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  pages: write
+
+jobs:
+  build-docs:
+    name: Build & Verify Sphinx Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[all,docs]
+
+      - name: Build Sphinx HTML documentation
+        run: |
+          mkdir -p docs/source/api docs/source/_static docs/source/_templates
+          cp README.md docs/source/readme.md
+          sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi
+          sphinx-build -b html docs/source docs/build/html
+
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sphinx-html-docs
+          path: docs/build/html
+
+  publish-pypi:
+    name: Build & Publish Package to PyPI
+    needs: [build-docs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build distributions
+        run: |
+          python -m build
+
+      - name: Validate distribution archives
+        run: |
+          python -m twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

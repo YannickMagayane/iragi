@@ -1,0 +1,48 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  quality-check:
+    name: Lint, Test, Docs & Packaging Verification
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[all,docs,test]
+          pip install build twine
+
+      - name: Run automated test suite
+        run: |
+          pytest -v
+
+      - name: Verify Sphinx documentation compilation (strict)
+        run: |
+          mkdir -p docs/source/api docs/source/_static docs/source/_templates
+          cp README.md docs/source/readme.md
+          sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi
+          sphinx-build -b html docs/source docs/build/html
+
+      - name: Verify package build and twine metadata check
+        run: |
+          python -m build
+          python -m twine check dist/*
