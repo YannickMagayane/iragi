@@ -83,11 +83,13 @@ Le moteur Scan analyse les fichiers structurés ou textuels afin d'en comprendre
 - **Profilage des colonnes :** détection des types inférés, unicité, cardinalité.
 - **Contrôle de complétude :** valeurs manquantes, vides ou nulles.
 - **Détection des doublons :** lignes redondantes ou quasi-doublons.
-- **Détection des types incohérents :** formats de dates invalides, anomalies numériques.
+- **Détection des types incohérents :** formats de dates invalides, anomalies numériques (y compris colonnes de prix formatées).
 - **Repérage d'anomalies statistiques :** outliers via méthode IQR configurable.
 - **Statistiques descriptives :** moyennes, médianes, min/max, percentiles.
 - **Score indicatif de qualité :** score pondéré et explicable sur 100 avec détail des pénalités.
 - **Recommandations exploitables :** conseils de nettoyage et d'assainissement ciblés.
+- **Contrats de données :** déclarez et appliquez des règles métier personnalisées par colonne (`not_null`, `positive`, `range`, `regex`).
+- **Lecture par morceaux (chunking) :** `read_csv_chunked()` traite les gros fichiers CSV par tranches configurables sans saturer la mémoire vive.
 - **Nettoyage explicite :** aucune mutation destructive du fichier source ; production de nouveaux artefacts nettoyés.
 
 ### 2. `iragi.pdf` — Extraction de documents PDF
@@ -114,6 +116,10 @@ Le module All combine les moteurs Scan et PDF dans un pipeline unifié et cohér
 4. Transmission automatique de ces données au moteur `iragi.scan`.
 5. Audit de conformité et calcul du score de qualité des données extraites.
 6. Génération d'un rapport consolidé traçable (JSON, HTML ou console).
+
+**Nouveautés v0.3.0 :**
+- **Audit multi-onglets Excel :** `batch_analyze([...], excel_all_sheets=True)` analyse chaque onglet d'un classeur indépendamment, au lieu de ne lire que le premier.
+- **Gestion des erreurs tracée :** les fichiers en erreur dans un lot produisent un résultat explicite (`success=False`, `error=...`) au lieu d'être silencieusement ignorés.
 
 ---
 
@@ -369,12 +375,18 @@ Grâce à son architecture découplée et composable, **Iragi s'intègre en quel
 - [x] Ajouter le traitement par lots.
 
 ### Phase 5 — Stabilisation et publication
-- [x] Vérifier la disponibilité du nom `iragi` sur PyPI (disponible).
+- [x] Vérifier la disponibilité du nom `iragi` sur PyPI (disponible).\
 - [x] Compléter les tests unitaires et d'intégration.
 - [x] Documenter les API publiques au fur et à mesure.
 - [x] Ajouter des exemples d'intégration Django et FastAPI.
 - [x] Vérifier les dépendances et les métadonnées du package.
 - [x] Publier la version v0.1.0 sur PyPI.
+
+### Phase 6 — Renforcement structurel (v0.3.0)
+- [x] Moteur de **contrats de données** (`DataContract`) avec règles personnalisables par colonne.
+- [x] **Lecture par morceaux** (`read_csv_chunked`) pour les fichiers CSV volumineux (> 1 Go).
+- [x] **Audit multi-onglets Excel** en mode batch (`excel_all_sheets=True`).
+- [x] 43 tests passants (10 nouveaux tests unitaires couvrant les 3 correctifs).
 
 ---
 

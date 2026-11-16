@@ -65,9 +65,11 @@ Inspects CSV, Excel, and JSON datasets without destructive mutations:
 - **Format detection:** Auto-detection of delimiters, encodings, and spreadsheet sheets.
 - **Column profiling:** Automated type inference (numeric, categorical, datetime, text), uniqueness, and cardinality metrics.
 - **Completeness & Hygiene checks:** Missing value rates, null indicators, whitespace issues, and duplicate row detection.
-- **Statistical anomaly detection:** Configurable Interquartile Range (IQR) outlier detection and date format validation.
+- **Statistical anomaly detection:** Configurable Interquartile Range (IQR) outlier detection and date format validation — including currency-formatted numeric columns.
 - **Explainable Quality Score (0–100):** Transparent penalty breakdown across missing data, duplicates, and outliers.
 - **Actionable recommendations:** Targeted cleanup hints generated alongside every scan.
+- **Data Contracts:** Declare and enforce custom business rules per column (`not_null`, `positive`, `range`, `regex`).
+- **Chunked reading:** `read_csv_chunked()` processes large CSV files in configurable memory slices without loading them entirely into RAM.
 
 ### 2. `iragi.pdf` — Document Extraction
 
@@ -83,6 +85,7 @@ A single interface to rule them all:
 - **Universal entrypoint:** `iragi.analyze(file_path)` determines file type and runs the optimal pipeline.
 - **PDF-to-Scan bridge:** Automatically extracts tables from PDF files and feeds them straight into the quality scan profiler.
 - **Batch processing:** Analyze entire directories or file collections simultaneously with `iragi.batch_analyze([...])`.
+- **Multi-sheet Excel batch:** Pass `excel_all_sheets=True` to audit every sheet of every workbook independently.
 
 ---
 
@@ -144,7 +147,65 @@ import iragi
 # Automatically routes to Scan or PDF engine
 result = iragi.analyze("quarterly_report.pdf")
 
-print(f"Type: {result.file_type}, Score: {result.quality_score.total_score if result.quality_score else 'N/A'}")
+print(f"Type: {result.file_type}, Score: {result.overall_quality_score:.1f}/100")
+```
+
+---
+
+## Data Contracts — Custom Business Rules
+
+Declare and enforce column-level rules on any DataFrame:
+
+```python
+import iragi
+import pandas as pd
+
+df = pd.read_csv("invoices.csv")
+
+contract = (
+    iragi.DataContract()
+    .require_not_null("invoice_id")                      # no null values allowed
+    .require_positive("amount")                          # amount must be > 0
+    .require_range("tax_rate", min_val=0, max_val=100)   # percentage 0–100
+    .require_regex("email", r"^[^@]+@[^@]+\.[^@]+$")    # valid email format
+)
+
+violations = iragi.validate_contract(df, contract)
+
+if violations:
+    for v in violations:
+        print(f"[{v.rule}] Column '{v.column}': {v.detail}")
+else:
+    print("All business rules passed.")
+```
+
+---
+
+## Multi-Sheet Excel Batch Audit
+
+```python
+import iragi
+
+# Audit every sheet of every Excel workbook independently
+results = iragi.batch_analyze(["annual_report.xlsx"], excel_all_sheets=True)
+
+for r in results:
+    status = "OK" if r.success else "FAILED"
+    print(f"{r.file_path} → {r.overall_quality_score:.1f}/100 [{status}]")
+```
+
+---
+
+## Large File Support (Chunked Reading)
+
+```python
+from iragi.scan import read_csv_chunked
+
+# Process a large CSV without memory overflow
+df = read_csv_chunked("transactions_2026.csv", chunksize=100_000)
+
+print(f"Total rows loaded: {len(df)}")
+print(f"Detected delimiter: {df.attrs.get('delimiter')}")
 ```
 
 ---
@@ -198,6 +259,7 @@ Iragi is built on a battle-tested Python stack:
 - [x] **Phase 3 — PDF Engine:** Text extraction, metadata, table reconstruction, OCR detection heuristics.
 - [x] **Phase 4 — All Orchestration:** Unified pipeline, PDF-to-Scan bridge, batch processing.
 - [x] **Phase 5 — Production & PyPI:** 100% test coverage, Sphinx docs, PyPI automated deployment.
+- [x] **Phase 6 — Structural Hardening (v0.3.0):** Data Contracts engine, multi-sheet Excel batch, chunked CSV reading.
 
 ---
 
