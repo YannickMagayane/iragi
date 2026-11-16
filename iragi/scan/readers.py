@@ -18,47 +18,59 @@ from iragi.core.exceptions import IragiDataError
 
 
 def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None) -> pd.DataFrame:
-    """Read a CSV file into a pandas DataFrame with automatic delimiter inference.
+    """Read a CSV file into a pandas DataFrame with automatic delimiter and BOM inference.
+
+    Handles UTF-8 with BOM (\\ufeff), standard UTF-8, Latin-1, and infers
+    common delimiters (',', ';', '\\t', '|'). Exposes detected delimiter
+    via DataFrame.attrs['delimiter'].
 
     :param file_path: Path to the CSV file.
     :type file_path: Union[str, Path]
     :param delimiter: Optional explicit column delimiter.
     :type delimiter: Optional[str]
-    :return: Loaded pandas DataFrame.
+    :return: Loaded pandas DataFrame with attrs['delimiter'] populated.
     :rtype: pd.DataFrame
     :raises IragiDataError: If the CSV file cannot be read or is invalid.
 
     Example:
-        >>> import tempfile, pathlib
+        >>> import tempfile
         >>> tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
-        >>> _ = tmp.write("a,b\\n1,2\\n3,4")
+        >>> _ = tmp.write("a;b\\n1;2\\n3;4")
         >>> tmp.close()
         >>> df = read_csv_file(tmp.name)
-        >>> df.shape
-        (2, 2)
+        >>> df.attrs.get("delimiter")
+        ';'
     """
     path = Path(file_path)
     if not path.is_file():
         raise IragiDataError(f"File not found: {path}")
 
-    # Common delimiters to check
+    # Encodings to try, starting with utf-8-sig to automatically strip BOM (\ufeff)
+    encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
     delimiters = [delimiter] if delimiter else [",", ";", "\t", "|"]
     last_error: Optional[Exception] = None
 
-    for sep in delimiters:
-        try:
-            df = pd.read_csv(path, sep=sep, engine="python")
-            # If multiple columns found, delimiter is likely correct
-            if len(df.columns) > 1 or sep == delimiters[-1]:
-                return df
-        except Exception as exc:
-            last_error = exc
+    for encoding in encodings:
+        for sep in delimiters:
+            try:
+                df = pd.read_csv(path, sep=sep, encoding=encoding, engine="python")
+                # If multiple columns found, or it's the only delimiter specified
+                if len(df.columns) > 1 or delimiter is not None or sep == delimiters[-1]:
+                    df.attrs["delimiter"] = sep
+                    df.attrs["encoding"] = encoding
+                    return df
+            except Exception as exc:
+                last_error = exc
 
     raise IragiDataError(f"Failed to parse CSV file '{path}': {last_error}")
 
 
-def read_excel_file(file_path: Union[str, Path], sheet_name: Optional[Union[str, int]] = 0) -> pd.DataFrame:
+def read_excel_file(
+    file_path: Union[str, Path], sheet_name: Optional[Union[str, int]] = 0
+) -> pd.DataFrame:
     """Read an Excel workbook (.xlsx or .xls) into a pandas DataFrame.
+
+    Exposes all available workbook sheet names via DataFrame.attrs['sheet_names'].
 
     :param file_path: Path to the Excel workbook.
     :type file_path: Union[str, Path]
@@ -82,7 +94,12 @@ def read_excel_file(file_path: Union[str, Path], sheet_name: Optional[Union[str,
         raise IragiDataError(f"File not found: {path}")
 
     try:
-        return pd.read_excel(path, sheet_name=sheet_name)
+        excel_file = pd.ExcelFile(path)
+        all_sheets = excel_file.sheet_names
+        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+        df.attrs["sheet_names"] = all_sheets
+        df.attrs["sheet_name"] = str(sheet_name)
+        return df
     except Exception as exc:
         raise IragiDataError(f"Failed to parse Excel file '{path}': {exc}") from exc
 
@@ -134,11 +151,19 @@ def read_json_file(file_path: Union[str, Path]) -> pd.DataFrame:
         raise IragiDataError(f"Failed to read JSON data from '{path}': {exc}") from exc
 
 
-def load_tabular_file(file_path: Union[str, Path]) -> Tuple[pd.DataFrame, str]:
+def load_tabular_file(
+    file_path: Union[str, Path],
+    sheet_name: Optional[Union[str, int]] = 0,
+    delimiter: Optional[str] = None,
+) -> Tuple[pd.DataFrame, str]:
     """Inspect file extension and load supported tabular data format.
 
     :param file_path: File system path of the target file.
     :type file_path: Union[str, Path]
+    :param sheet_name: Target sheet name or index for Excel files (default: 0).
+    :type sheet_name: Optional[Union[str, int]]
+    :param delimiter: Optional explicit CSV delimiter.
+    :type delimiter: Optional[str]
     :return: A tuple of (loaded DataFrame, format string 'csv'|'excel'|'json').
     :rtype: Tuple[pd.DataFrame, str]
     :raises IragiDataError: When the file format is unsupported or loading fails.
@@ -156,9 +181,9 @@ def load_tabular_file(file_path: Union[str, Path]) -> Tuple[pd.DataFrame, str]:
     suffix = path.suffix.lower()
 
     if suffix in [".csv", ".tsv", ".txt"]:
-        return read_csv_file(path), "csv"
+        return read_csv_file(path, delimiter=delimiter), "csv"
     elif suffix in [".xlsx", ".xls", ".xlsm"]:
-        return read_excel_file(path), "excel"
+        return read_excel_file(path, sheet_name=sheet_name), "excel"
     elif suffix in [".json", ".jsonl", ".ndjson"]:
         return read_json_file(path), "json"
     else:

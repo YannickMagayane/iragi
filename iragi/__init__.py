@@ -10,6 +10,12 @@ Example:
 
 from iragi.scan import scan, scan_dataframe
 from iragi.all import analyze, batch_analyze
+import iragi.pdf as pdf
+import iragi.all as all
 
-__version__ = "0.2.0"
-__all__ = ["__version__", "scan", "scan_dataframe", "analyze", "batch_analyze"]
+# Compatibility shim: allows both iragi.scan(...) and iragi.scan.scan(...)
+scan.scan = scan
+scan.scan_dataframe = scan_dataframe
+
+__version__ = "0.2.2"
+__all__ = ["__version__", "scan", "scan_dataframe", "analyze", "batch_analyze", "pdf", "all"]

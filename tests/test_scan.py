@@ -161,3 +161,73 @@ def test_json_report_generation() -> None:
     assert "quality_score" in parsed
     assert "column_profiles" in parsed
     assert parsed["row_count"] == 3
+
+
+def test_read_csv_utf8_bom_and_delimiter_attribute() -> None:
+    """Verify CSV reader handles UTF-8 with BOM and exposes detected delimiter.
+
+    Example:
+        >>> df = read_csv_file("bom.csv")
+        >>> assert df.attrs["delimiter"] == ";"
+    """
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as f:
+        # Write UTF-8 BOM (\xef\xbb\xbf) followed by semicolon-separated data
+        content = "\ufeffid;produit;montant\n1;Pomme;12,50\n2;Banane;8,00\n".encode("utf-8-sig")
+        f.write(content)
+        csv_path = f.name
+
+    result = scan(csv_path)
+    assert result.row_count == 2
+    assert result.delimiter == ";"
+    Path(csv_path).unlink()
+
+
+def test_excel_sheet_names_and_selection() -> None:
+    """Verify Excel reader exposes all available sheet names and allows sheet selection.
+
+    Example:
+        >>> res = scan("data.xlsx", sheet_name=0)
+        >>> assert "Sheet1" in res.sheet_names
+    """
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as f:
+        excel_path = f.name
+
+    with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
+        pd.DataFrame({"x": [1, 2]}).to_excel(writer, sheet_name="Synthese", index=False)
+        pd.DataFrame({"y": [10, 20, 30]}).to_excel(writer, sheet_name="Donnees", index=False)
+
+    result = scan(excel_path, sheet_name="Donnees")
+    assert result.row_count == 3
+    assert result.sheet_names is not None
+    assert "Synthese" in result.sheet_names
+    assert "Donnees" in result.sheet_names
+    Path(excel_path).unlink()
+
+
+def test_formatted_numbers_inferred_as_numeric_with_outliers() -> None:
+    """Verify that columns with formatted numbers (commas, spaces) are recognized as numeric and tested for outliers.
+
+    Example:
+        >>> s = pd.Series(["1 000,50", "1 010,00", "100 000,00"])
+        >>> assert infer_column_type(s) == "numeric"
+    """
+    s = pd.Series(["100,50", "102,00", "99,80", "101,20", "5 000,00"])
+    assert infer_column_type(s) == "numeric"
+    outliers = detect_outliers_iqr(s)
+    assert outliers == 1
+
+
+def test_api_shadowing_shim_compatibility() -> None:
+    """Verify that iragi.scan.scan(...) and scan.scan(...) are both callable without AttributeError.
+
+    Example:
+        >>> import iragi
+        >>> res = iragi.scan.scan(path)
+    """
+    import iragi
+    import iragi.scan as scan_module
+
+    assert callable(iragi.scan)
+    assert callable(iragi.scan.scan)
+    assert callable(scan_module.scan)
+    assert callable(scan_module.scan.scan)

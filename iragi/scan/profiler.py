@@ -67,6 +67,19 @@ def infer_column_type(series: pd.Series) -> str:
             except Exception:
                 pass
 
+        # Check if numbers stored as formatted strings (e.g. currency, commas, spaces)
+        cleaned_num = (
+            sample.str.replace(" ", "", regex=False)
+            .str.replace("\xa0", "", regex=False)
+            .str.replace(",", ".", regex=False)
+            .str.replace("€", "", regex=False)
+            .str.replace("$", "", regex=False)
+            .str.replace("%", "", regex=False)
+        )
+        converted_num = pd.to_numeric(cleaned_num, errors="coerce")
+        if converted_num.notna().sum() / len(sample) >= 0.7:
+            return "numeric"
+
         unique_ratio = clean_series.nunique() / len(clean_series)
         if unique_ratio < 0.2 and clean_series.nunique() <= 50:
             return "categorical"
@@ -90,7 +103,21 @@ def detect_outliers_iqr(series: pd.Series, multiplier: float = 1.5) -> int:
         >>> detect_outliers_iqr(s, multiplier=1.5)
         1
     """
-    clean = pd.to_numeric(series, errors="coerce").dropna()
+    if pd.api.types.is_numeric_dtype(series):
+        clean = series.dropna()
+    else:
+        cleaned_str = (
+            series.dropna()
+            .astype(str)
+            .str.replace(" ", "", regex=False)
+            .str.replace("\xa0", "", regex=False)
+            .str.replace(",", ".", regex=False)
+            .str.replace("€", "", regex=False)
+            .str.replace("$", "", regex=False)
+            .str.replace("%", "", regex=False)
+        )
+        clean = pd.to_numeric(cleaned_str, errors="coerce").dropna()
+
     if len(clean) < 4:
         return 0
 
@@ -151,7 +178,19 @@ def compute_column_summary(series: pd.Series, inferred_type: str) -> Dict[str, A
 
     summary: Dict[str, Any] = {}
     if inferred_type == "numeric":
-        num_clean = pd.to_numeric(clean, errors="coerce").dropna()
+        if pd.api.types.is_numeric_dtype(clean):
+            num_clean = clean
+        else:
+            cleaned_str = (
+                clean.astype(str)
+                .str.replace(" ", "", regex=False)
+                .str.replace("\xa0", "", regex=False)
+                .str.replace(",", ".", regex=False)
+                .str.replace("€", "", regex=False)
+                .str.replace("$", "", regex=False)
+                .str.replace("%", "", regex=False)
+            )
+            num_clean = pd.to_numeric(cleaned_str, errors="coerce").dropna()
         if not num_clean.empty:
             summary["mean"] = float(num_clean.mean())
             summary["std"] = float(num_clean.std()) if len(num_clean) > 1 else 0.0

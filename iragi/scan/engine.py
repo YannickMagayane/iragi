@@ -202,6 +202,9 @@ def scan_dataframe(
         invalid_dates_count=invalid_dates,
     )
 
+    delimiter = df.attrs.get("delimiter")
+    sheet_names = df.attrs.get("sheet_names")
+
     return DataInspectionResult(
         file_path=source_name,
         row_count=row_count,
@@ -213,17 +216,28 @@ def scan_dataframe(
         quality_score=quality_score,
         column_profiles=column_profiles,
         recommendations=recommendations,
+        delimiter=delimiter,
+        sheet_names=sheet_names,
         analyzed_at=datetime.now(),
     )
 
 
-def scan(file_path: Union[str, Path], config: Optional[IragiConfig] = None) -> DataInspectionResult:
+def scan(
+    file_path: Union[str, Path],
+    config: Optional[IragiConfig] = None,
+    sheet_name: Optional[Union[str, int]] = 0,
+    delimiter: Optional[str] = None,
+) -> DataInspectionResult:
     """Inspect, profile, and evaluate the quality of a CSV, Excel, or JSON file.
 
     :param file_path: Path to target file.
     :type file_path: Union[str, Path]
     :param config: Optional custom configuration instance.
     :type config: Optional[IragiConfig]
+    :param sheet_name: Target sheet name or index for Excel files (default: 0).
+    :type sheet_name: Optional[Union[str, int]]
+    :param delimiter: Optional explicit CSV delimiter.
+    :type delimiter: Optional[str]
     :return: Comprehensive DataInspectionResult.
     :rtype: DataInspectionResult
 
@@ -237,5 +251,10 @@ def scan(file_path: Union[str, Path], config: Optional[IragiConfig] = None) -> D
         2
     """
     path = Path(file_path)
-    df, _ = load_tabular_file(path)
+    df, _ = load_tabular_file(path, sheet_name=sheet_name, delimiter=delimiter)
     return scan_dataframe(df, source_name=str(path), config=config)
+
+
+# Self-reference for API compatibility: allows both scan(...) and scan.scan(...)
+scan.scan = scan  # type: ignore[attr-defined]
+scan.scan_dataframe = scan_dataframe  # type: ignore[attr-defined]

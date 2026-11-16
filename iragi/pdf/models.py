@@ -120,3 +120,12 @@ class ExtractedDocument:
     full_text: str = ""
     tables: List[ExtractedTable] = field(default_factory=list)
     requires_ocr: bool = False
+
+    @property
+    def is_scanned(self) -> bool:
+        """Alias returning whether the document is scanned / requires OCR.
+
+        :return: True if OCR is required.
+        :rtype: bool
+        """
+        return self.requires_ocr

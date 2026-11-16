@@ -98,6 +98,10 @@ class DataInspectionResult:
     :type column_profiles: List[ColumnProfile]
     :param recommendations: Actionable cleaning and quality improvement recommendations.
     :type recommendations: List[str]
+    :param delimiter: Inferred CSV delimiter (e.g. ',', ';', '\t') if applicable.
+    :type delimiter: Optional[str]
+    :param sheet_names: List of all sheet names if Excel workbook.
+    :type sheet_names: Optional[List[str]]
     :param analyzed_at: Timestamp of inspection completion.
     :type analyzed_at: datetime
 
@@ -118,6 +122,8 @@ class DataInspectionResult:
     quality_score: QualityScore
     column_profiles: List[ColumnProfile] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
+    delimiter: Optional[str] = None
+    sheet_names: Optional[List[str]] = None
     analyzed_at: datetime = field(default_factory=datetime.now)
 
 

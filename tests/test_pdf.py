@@ -130,3 +130,21 @@ def test_missing_pdf_raises_error() -> None:
     """
     with pytest.raises(IragiDataError):
         extract("non_existent_file.pdf")
+
+
+def test_extracted_document_is_scanned_property() -> None:
+    """Verify that doc.is_scanned is accessible and matches requires_ocr.
+
+    Example:
+        >>> doc = extract("sample.pdf")
+        >>> assert isinstance(doc.is_scanned, bool)
+    """
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        pdf_path = f.name
+    create_sample_pdf(pdf_path, "Clean digital invoice with rich text content.")
+
+    doc = extract(pdf_path)
+    assert hasattr(doc, "is_scanned")
+    assert doc.is_scanned is False
+    assert doc.is_scanned == doc.requires_ocr
+    Path(pdf_path).unlink()
