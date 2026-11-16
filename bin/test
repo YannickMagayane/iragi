@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#
+# Run automated test suite with pytest.
+#
+
+set -euo pipefail
+
+source "$(dirname "$0")/_common.sh"
+
+cd "${PROJECT_ROOT}"
+
+echo "Running test suite..."
+pytest "$@"

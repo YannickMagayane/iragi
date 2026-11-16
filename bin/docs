@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+#
+# Generate Sphinx documentation for the project.
+#
+# This script extracts docstrings from Python modules in `iragi/` using `sphinx-apidoc`
+# and builds the complete HTML documentation using `sphinx-build`.
+# The resulting documentation is available at `docs/build/html/`.
+#
+# Usage:
+#   bin/docs [OPTIONS] [SPHINX_BUILD_OPTIONS]
+#
+# Options:
+#   --remove-old, --clean    Remove previously generated API files and build output before generation
+#   -h, --help               Show usage help
+#
+# Examples:
+#   # Standard build
+#   bin/docs
+#
+#   # Clean rebuild without cache
+#   bin/docs --remove-old -E -a
+#
+
+set -euo pipefail
+
+source "$(dirname "$0")/_common.sh"
+
+BUILD_ARGS=()
+CLEAN_OLD=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --remove-old|--clean)
+            CLEAN_OLD=true
+            ;;
+        -h|--help)
+            echo "Usage: bin/docs [OPTIONS] [SPHINX_BUILD_OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --remove-old, --clean  Remove old generated API files and build cache"
+            echo "  -h, --help             Show this help message"
+            echo ""
+            echo "Sphinx Build Options:"
+            echo "  -E                     Don't use a saved environment, always read all files"
+            echo "  -a                     Always write all output files"
+            echo "  -v                     Increase verbosity"
+            echo "  -W                     Turn warnings into errors"
+            exit 0
+            ;;
+        *)
+            BUILD_ARGS+=("$arg")
+            ;;
+    esac
+done
+
+cd "${PROJECT_ROOT}"
+
+if [ "$CLEAN_OLD" = true ]; then
+    echo "Cleaning previous documentation build and API sources..."
+    rm -rf docs/source/api docs/build/html
+fi
+
+# Ensure directories exist and copy README for Sphinx MyST parser
+mkdir -p docs/source/api docs/source/_static docs/source/_templates docs/build/html
+if [ -f "README.md" ]; then
+    cp README.md docs/source/readme.md
+fi
+
+DOCS_CMD='mkdir -p docs/source/api docs/source/_static docs/source/_templates && \
+sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi iragi/*/migrations iragi/theme/static_src && \
+sphinx-build -b html docs/source docs/build/html "$@"'
+
+echo "Generating complete Sphinx documentation..."
+
+# Check if Docker compose is available and a container is running
+RUN_IN_DOCKER=false
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    if docker compose ${COMPOSE_ARGS} ps --services --filter "status=running" 2>/dev/null | grep -q -E "^(tune|app|web|iragi)$"; then
+        RUN_IN_DOCKER=true
+        CONTAINER_NAME=$(docker compose ${COMPOSE_ARGS} ps --services --filter "status=running" 2>/dev/null | grep -E "^(tune|app|web|iragi)$" | head -n 1)
+    fi
+fi
+
+if [ "$RUN_IN_DOCKER" = true ]; then
+    echo "Running Sphinx in existing container (${CONTAINER_NAME})..."
+    docker compose ${COMPOSE_ARGS} exec -w /app "${CONTAINER_NAME}" bash -c "$DOCS_CMD" bash ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"}
+else
+    echo "Running Sphinx in local environment..."
+    sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi
+    sphinx-build -b html docs/source docs/build/html ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"}
+fi
+
+echo "Documentation successfully generated in docs/build/html/"
+echo "Open file://${PROJECT_ROOT}/docs/build/html/index.html to view it."

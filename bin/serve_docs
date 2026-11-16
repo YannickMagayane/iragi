@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#
+# Serve Sphinx HTML documentation locally on http://localhost:8000.
+#
+
+set -euo pipefail
+
+source "$(dirname "$0")/_common.sh"
+
+cd "${PROJECT_ROOT}/docs/build/html"
+
+PORT="${1:-8000}"
+echo "Serving documentation at http://localhost:${PORT}"
+echo "Press Ctrl+C to stop."
+python -m http.server "${PORT}"

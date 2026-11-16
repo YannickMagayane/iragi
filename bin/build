@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#
+# Build clean distribution archives (sdist and wheel) for PyPI.
+# Ensures that .env, tests, and build artifacts are completely excluded.
+#
+
+set -euo pipefail
+
+source "$(dirname "$0")/_common.sh"
+
+cd "${PROJECT_ROOT}"
+
+echo "Cleaning previous distribution builds..."
+rm -rf dist/ build/ *.egg-info
+
+echo "Building source and wheel packages..."
+python -m build
+
+echo "Validating packages with twine check..."
+python -m twine check dist/*
+
+echo ""
+echo "Contents of the generated source distribution:"
+tar -ztvf dist/*.tar.gz | head -n 30
+
+echo ""
+echo "Build succeeded. Files ready in dist/:"
+ls -lh dist/
