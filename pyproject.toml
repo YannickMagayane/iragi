@@ -37,6 +37,7 @@ Documentation = "https://pypi.org/project/iragi/#description"
 
 [project.optional-dependencies]
 pdf = [
+    "pymupdf>=1.24.0",
     "pypdf>=4.0.0",
     "pdfplumber>=0.10.0",
 ]
@@ -45,6 +46,7 @@ ocr = [
     "pillow>=10.0.0",
 ]
 all = [
+    "pymupdf>=1.24.0",
     "pypdf>=4.0.0",
     "pdfplumber>=0.10.0",
     "pytesseract>=0.3.10",
@@ -57,6 +59,9 @@ docs = [
 ]
 test = [
     "pytest>=8.0.0",
+    "pymupdf>=1.24.0",
+    "pdfplumber>=0.10.0",
+    "pypdf>=4.0.0",
 ]
 dev = [
     "pytest>=8.0.0",

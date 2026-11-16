@@ -11,7 +11,7 @@ Example:
 import tempfile
 from pathlib import Path
 import pytest
-import pymupdf as fitz
+fitz = pytest.importorskip("pymupdf", reason="PyMuPDF is required for PDF tests")
 import pandas as pd
 from iragi.core.exceptions import IragiDataError
 from iragi.pdf import extract, extract_text, extract_metadata, ExtractedTable, is_page_likely_scanned
