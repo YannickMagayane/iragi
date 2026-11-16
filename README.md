@@ -334,7 +334,7 @@ iragi/
 - [x] Définir les exceptions et les objets de résultat communs (`iragi.core`).
 - [x] Mettre en place les tests unitaires et l'intégration continue (`.github/workflows/ci.yml`).
 - [x] Configurer la génération de documentation Sphinx (`bin/docs`).
-- [ ] Créer une première CLI de base.
+- [x] Créer une première CLI de base.
 
 ### Phase 2 — Moteur Scan
 - [x] Lire les fichiers CSV.
@@ -346,26 +346,26 @@ iragi/
 - [x] Produire un premier rapport JSON.
 
 ### Phase 3 — Moteur PDF
-- [ ] Extraire le texte avec PyMuPDF.
-- [ ] Lire les métadonnées.
-- [ ] Extraire les tableaux avec pdfplumber.
-- [ ] Ajouter la détection des PDF nécessitant un OCR.
-- [ ] Ajouter l'OCR comme dépendance optionnelle.
-- [ ] Ajouter les exports structurés.
+- [x] Extraire le texte avec PyMuPDF.
+- [x] Lire les métadonnées.
+- [x] Extraire les tableaux avec pdfplumber.
+- [x] Ajouter la détection des PDF nécessitant un OCR.
+- [x] Ajouter l'OCR comme dépendance optionnelle.
+- [x] Ajouter les exports structurés.
 
 ### Phase 4 — Orchestration All
-- [ ] Définir le pipeline commun.
-- [ ] Connecter les résultats du moteur PDF au moteur Scan.
-- [ ] Produire un rapport global.
-- [ ] Ajouter le traitement par lots.
+- [x] Définir le pipeline commun.
+- [x] Connecter les résultats du moteur PDF au moteur Scan.
+- [x] Produire un rapport global.
+- [x] Ajouter le traitement par lots.
 
 ### Phase 5 — Stabilisation et publication
 - [x] Vérifier la disponibilité du nom `iragi` sur PyPI (disponible).
-- [ ] Compléter les tests unitaires et d'intégration.
-- [ ] Documenter les API publiques au fur et à mesure.
-- [ ] Ajouter des exemples d'intégration Django et FastAPI.
-- [ ] Vérifier les dépendances et les métadonnées du package.
-- [ ] Publier la version v0.1.0 sur PyPI.
+- [x] Compléter les tests unitaires et d'intégration.
+- [x] Documenter les API publiques au fur et à mesure.
+- [x] Ajouter des exemples d'intégration Django et FastAPI.
+- [x] Vérifier les dépendances et les métadonnées du package.
+- [x] Publier la version v0.1.0 sur PyPI.
 
 ---
 
