@@ -12,6 +12,7 @@ qui orchestre leur fonctionnement dans un pipeline unifié.
    :caption: Table des matières:
 
    readme
+   readme_fr
    api/modules
 
 Indices and tables
