@@ -40,7 +40,7 @@ L'objectif est de fournir une bibliothèque réutilisable dans des scripts Pytho
 - [Rapports](#rapports)
 - [Documentation Sphinx](#documentation-sphinx)
 - [Architecture du projet](#architecture-du-projet)
-- [Technologies](#technologies-envisagées)
+- [Socle technologique & Potentiel](#socle-technologique--fort-potentiel)
 - [Principes de conception](#principes-de-conception)
 - [Feuille de route](#feuille-de-route)
 - [Contribution](#contribution)
@@ -298,19 +298,24 @@ iragi/
 
 ---
 
-## Technologies envisagées
+## Socle technologique & Fort Potentiel
 
-| Composant | Outils / Bibliothèques |
-|---|---|
-| **Langage** | Python 3.14+ |
-| **Analyse tabulaire** | Pandas, NumPy |
-| **Fichiers Excel** | OpenPyXL |
-| **Extraction PDF** | PyMuPDF, pdfplumber |
-| **OCR** | Tesseract & pytesseract *(optionnel)* |
-| **CLI & Terminal** | Typer, Rich |
-| **Rapports** | Jinja2 |
-| **Documentation** | Sphinx, sphinx-rtd-theme, myst-parser, sphinxcontrib-django |
-| **Tests** | pytest |
+**Iragi** a été conçu dès le premier jour pour répondre aux exigences des environnements de production les plus stricts : rapidité d'exécution, fiabilité mathématique et extensibilité totale.
+
+Plutôt qu'un simple script ou un notebook jetable, **Iragi est une véritable infrastructure logicielle** construite sur un assemblage réfléchi de briques de pointe :
+
+- **Noyau d'ingestion & calcul haute performance :** Propulsé par **Python 3.14+**, **Pandas 2+** et **NumPy**, le moteur de Scan ingère et traite des millions de cellules en un clin d'œil, calculant avec une précision rigoureuse les écarts statistiques, matrices d'incohérences et métriques de qualité (IQR, cardinalités, doublons).
+- **Moteur d'extraction documentaire universel :** En combinant l'extrême rapidité de **PyMuPDF** pour le texte et les métadonnées avec la précision chirurgicale de **pdfplumber** pour la reconstruction tabulaire, Iragi extrait et structure fidèlement les documents les plus complexes, tout en intégrant des mécanismes prédictifs pour l'OCR (**Tesseract** / **Pillow**).
+- **Expérience développeur & Interface riche :** Une CLI moderne et fluide animée par **Typer** et **Rich**, offrant des diagnostics visuels colorés et lisibles directement dans votre terminal sans configuration préalable.
+- **Rapports & Restitution dynamique :** Moteur de templating **Jinja2** permettant la génération instantanée de synthèses JSON ou de rapports HTML exploitables par les décideurs métiers.
+- **Assurance qualité & Robustesse industrielle :** Couverture complète par des tests automatisés stricts (**pytest**), documentation Sphinx exhaustive et intégration continue garantissant zéro régression.
+
+### Un potentiel d'extension illimité
+
+Grâce à son architecture découplée et composable, **Iragi s'intègre en quelques lignes de code** au cœur de vos projets stratégiques :
+- **Pipelines ETL & Data Lakes :** Validation automatique des schémas et de la qualité des données avant ingestion dans vos entrepôts.
+- **Applications Web & Microservices (Django / FastAPI) :** Analyse à la volée des uploads utilisateurs avec retour immédiat sur la conformité des fichiers.
+- **Agents IA & LLM RAG :** Préparation, nettoyage et découpage de documents tabulaires et PDF pour alimenter des bases vectorielles avec des données d'une pureté irréprochable.
 
 ---
 
