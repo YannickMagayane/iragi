@@ -13,13 +13,14 @@
   <a href="https://github.com/YannickMagayane/iragi"><img src="https://img.shields.io/badge/GitHub-YannickMagayane%2Firagi-181717?style=flat&logo=github&logoColor=white" alt="GitHub Repository"></a>
   <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/v/iragi?color=green&label=PyPI" alt="PyPI Package"></a>
   <a href="#objectives"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
+  <a href="https://github.com/YannickMagayane/iragi/actions/workflows/ci.yml"><img src="https://github.com/YannickMagayane/iragi/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="#license"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
-  <a href="http://localhost:8000/"><img src="https://img.shields.io/badge/Docs-Sphinx-orange.svg" alt="Sphinx Docs"></a>
+  <a href="https://yannickmagayane.github.io/iragi/"><img src="https://img.shields.io/badge/Docs-Sphinx-orange.svg" alt="Sphinx Docs"></a>
 </p>
 
 ---
 
-**Iragi** is a production-grade modular Python library designed for inspecting file quality, extracting unstructured document data, and running unified analysis workflows. It combines two decoupled engines — **Scan** and **PDF** — governed by an orchestration layer named **All**.
+**Iragi** is a modular Python library for inspecting file quality, extracting unstructured document data, and running unified analysis workflows. It combines two decoupled engines — **Scan** and **PDF** — governed by an orchestration layer named **All**.
 
 Engineered for seamless integration into standalone Python scripts, Django applications, FastAPI microservices, and data engineering pipelines, Iragi also includes a rich, modern command-line interface (CLI).
 
@@ -464,7 +465,7 @@ Iragi is built on a battle-tested Python stack:
 - **Universal Extraction:** PyMuPDF, pdfplumber, Tesseract / Pillow.
 - **Developer Experience:** Typer, Rich terminal diagnostics.
 - **Reporting Engine:** Jinja2 templating for JSON and HTML reporting.
-- **Industrial Rigor:** 100% automated test coverage with `pytest`, strict Sphinx API documentation.
+- **Quality Checks:** Automated tests run in GitHub Actions across Python 3.10–3.12, with Sphinx API documentation.
 
 ### Ready for Strategic Integration
 - **ETL & Data Warehousing:** Automated schema validation and hygiene checks before loading into Lakehouses.
@@ -486,7 +487,7 @@ Iragi is built on a battle-tested Python stack:
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and submit a Pull Request.  
+Contributions are welcome! Please read [CONTRIBUTING.md](https://github.com/YannickMagayane/iragi/blob/main/CONTRIBUTING.md) and submit a Pull Request.
 All PRs targeting `main` require review and approval by `@YannickMagayane`.
 
 ---

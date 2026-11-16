@@ -102,7 +102,12 @@ def _sanitize_formulas(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None, sanitize_formulas: bool = False) -> pd.DataFrame:
+def read_csv_file(
+    file_path: Union[str, Path],
+    delimiter: Optional[str] = None,
+    sanitize_formulas: bool = False,
+    nrows: Optional[int] = None,
+) -> pd.DataFrame:
     """Read a CSV file into a pandas DataFrame with automatic delimiter and BOM inference.
 
     Handles UTF-8 with BOM (\\ufeff), standard UTF-8, Latin-1, and infers
@@ -116,6 +121,9 @@ def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None, 
     :param sanitize_formulas: If True, strip leading ``= + - @`` from string cells
         to prevent CSV Formula Injection. Default: False (backward compatible).
     :type sanitize_formulas: bool
+    :param nrows: Optional maximum number of data rows to read. Useful for bounded
+        delimiter and encoding detection on large CSV files.
+    :type nrows: Optional[int]
     :return: Loaded pandas DataFrame with attrs['delimiter'] populated.
     :rtype: pd.DataFrame
     :raises IragiDataError: If the CSV file cannot be read or is invalid.
@@ -141,7 +149,9 @@ def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None, 
     for encoding in encodings:
         for sep in delimiters:
             try:
-                df = pd.read_csv(path, sep=sep, encoding=encoding, engine="python")
+                df = pd.read_csv(
+                    path, sep=sep, encoding=encoding, engine="python", nrows=nrows
+                )
                 # If multiple columns found, or it's the only delimiter specified
                 if len(df.columns) > 1 or delimiter is not None or sep == delimiters[-1]:
                     df.attrs["delimiter"] = sep
@@ -445,7 +455,7 @@ def iter_csv_chunks(
     if not path.is_file():
         raise IragiDataError(f"File not found: {path}")
 
-    probe = read_csv_file(path, delimiter=delimiter)
+    probe = read_csv_file(path, delimiter=delimiter, nrows=1000)
     detected_delimiter = probe.attrs.get("delimiter", ",")
     detected_encoding = probe.attrs.get("encoding", "utf-8-sig")
 
@@ -455,7 +465,6 @@ def iter_csv_chunks(
             sep=detected_delimiter,
             encoding=detected_encoding,
             chunksize=chunksize,
-            engine="python",
         )
         for chunk in reader:
             if sanitize_formulas:

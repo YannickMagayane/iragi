@@ -35,7 +35,7 @@ scan.scan_dataframe = scan_dataframe
 scan.scan_csv_stream = scan_csv_stream
 scan.scan_excel_stream = scan_excel_stream
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 __all__ = [
     "__version__",
     "scan",
