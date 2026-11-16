@@ -1,7 +1,7 @@
 # Iragi
 
 <p align="center">
-  <strong>🇬🇧 English</strong> &nbsp;|&nbsp; <a href="README.fr.md">🇫🇷 Français</a>
+  <strong>🇬🇧 English</strong> &nbsp;|&nbsp; <a href="https://github.com/YannickMagayane/iragi/blob/main/README.fr.md">🇫🇷 Lire en Français</a>
 </p>
 
 <p align="center">
@@ -198,6 +198,19 @@ Iragi is built on a battle-tested Python stack:
 - [x] **Phase 3 — PDF Engine:** Text extraction, metadata, table reconstruction, OCR detection heuristics.
 - [x] **Phase 4 — All Orchestration:** Unified pipeline, PDF-to-Scan bridge, batch processing.
 - [x] **Phase 5 — Production & PyPI:** 100% test coverage, Sphinx docs, PyPI automated deployment.
+
+---
+
+---
+
+## 🇫🇷 Aperçu en Français
+
+**Iragi** est une bibliothèque logicielle Python de niveau industriel dédiée à l'inspection de qualité de données et à l'extraction de documents complexes (CSV, Excel, JSON et PDF).
+
+- **Architecture :** Deux moteurs indépendants (`iragi.scan` et `iragi.pdf`) coordonnés par un pipeline unifié (`iragi.all`).
+- **Score de qualité transparent :** Note sur 100 avec explications claires des anomalies (doublons, valeurs manquantes, outliers).
+- **Extraction PDF :** Récupération ultra-rapide du texte, détection de scans papier (OCR) et conversion de tableaux en DataFrames Pandas.
+- **Documentation complète en français :** [Lire le guide complet en français (README.fr.md)](https://github.com/YannickMagayane/iragi/blob/main/README.fr.md).
 
 ---
 

@@ -1,7 +1,7 @@
 # Iragi
 
 <p align="center">
-  <a href="README.md">🇬🇧 English</a> &nbsp;|&nbsp; <strong>🇫🇷 Français</strong>
+  <a href="https://github.com/YannickMagayane/iragi/blob/main/README.md">🇬🇧 Read in English</a> &nbsp;|&nbsp; <strong>🇫🇷 Français</strong>
 </p>
 
 <p align="center">
