@@ -8,7 +8,6 @@ Example:
 """
 
 import re
-import tomllib
 from pathlib import Path
 import pytest
 import iragi
@@ -21,18 +20,24 @@ ROOT = Path(__file__).parent.parent
 
 
 def _read_pyproject_version() -> str:
-    """Read the canonical version from pyproject.toml.
+    """Read the canonical version from pyproject.toml without external dependencies.
 
-    :return: Version string, e.g. ``"0.2.0"``.
+    Compatible across all Python versions (including 3.10 where tomllib is not in stdlib).
+
+    :return: Version string, e.g. ``"0.1.0"``.
     :rtype: str
 
     Example:
         >>> v = _read_pyproject_version()
         >>> assert re.match(r"\\d+\\.\\d+\\.\\d+", v)
     """
-    with open(ROOT / "pyproject.toml", "rb") as fh:
-        data = tomllib.load(fh)
-    return data["project"]["version"]
+    pyproject_path = ROOT / "pyproject.toml"
+    with open(pyproject_path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped.startswith("version = "):
+                return stripped.split("=")[1].strip().strip('"').strip("'")
+    return ""
 
 
 def test_iragi_version() -> None:

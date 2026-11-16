@@ -11,3 +11,8 @@ cd "${PROJECT_ROOT}"
 
 echo "Running test suite..."
 pytest "$@"
+
+echo ""
+echo "Tests passed successfully. Rebuilding documentation..."
+"${PROJECT_ROOT}/bin/docs"
+echo "Documentation updated."
