@@ -14,7 +14,14 @@ Example:
     100.0
 """
 
-from iragi.scan.engine import scan, scan_dataframe, scan_csv_stream, compute_quality_score, generate_recommendations
+from iragi.scan.engine import (
+    scan,
+    scan_dataframe,
+    scan_csv_stream,
+    scan_excel_stream,
+    compute_quality_score,
+    generate_recommendations,
+)
 from iragi.scan.readers import (
     load_tabular_file,
     read_csv_file,
@@ -23,6 +30,7 @@ from iragi.scan.readers import (
     read_parquet_file,
     read_csv_chunked,
     iter_csv_chunks,
+    iter_excel_chunks,
 )
 from iragi.scan.profiler import profile_dataframe, infer_column_type, detect_outliers_iqr, detect_outliers_modified_zscore
 from iragi.scan.reports import to_json_report, inspection_result_to_dict
@@ -34,12 +42,14 @@ __all__ = [
     "scan",
     "scan_dataframe",
     "scan_csv_stream",
+    "scan_excel_stream",
     "compute_quality_score",
     "generate_recommendations",
     "load_tabular_file",
     "read_csv_file",
     "read_csv_chunked",
     "iter_csv_chunks",
+    "iter_excel_chunks",
     "read_excel_file",
     "read_json_file",
     "read_parquet_file",

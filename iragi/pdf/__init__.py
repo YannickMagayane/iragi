@@ -8,8 +8,16 @@ Example:
     >>> # doc = extract("document.pdf")
 """
 
-from iragi.pdf.extractor import extract, extract_text_from_pdf as extract_text, extract_metadata_from_pdf as extract_metadata
-from iragi.pdf.tables import extract_tables_from_pdf as extract_tables
+from iragi.pdf.extractor import (
+    extract,
+    extract_text_from_pdf as extract_text,
+    extract_metadata_from_pdf as extract_metadata,
+    iter_pdf_pages,
+)
+from iragi.pdf.tables import (
+    extract_tables_from_pdf as extract_tables,
+    extract_tables_stream,
+)
 from iragi.pdf.models import ExtractedDocument, ExtractedPage, ExtractedTable
 from iragi.pdf.ocr import is_page_likely_scanned, run_ocr_on_image
 
@@ -17,7 +25,9 @@ __all__ = [
     "extract",
     "extract_text",
     "extract_tables",
+    "extract_tables_stream",
     "extract_metadata",
+    "iter_pdf_pages",
     "ExtractedDocument",
     "ExtractedPage",
     "ExtractedTable",

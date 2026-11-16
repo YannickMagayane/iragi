@@ -223,6 +223,87 @@ def read_excel_file(
         raise IragiDataError(f"Failed to parse Excel file '{path}': {exc}") from exc
 
 
+def iter_excel_chunks(
+    file_path: Union[str, Path],
+    sheet_name: Optional[Union[str, int]] = 0,
+    chunksize: int = 50_000,
+) -> Iterator[pd.DataFrame]:
+    """Yield successive DataFrame chunks from an Excel spreadsheet.
+
+    Enables bounded-memory streaming without loading entire large spreadsheets in RAM.
+
+    :param file_path: Path to the Excel spreadsheet (.xlsx, .xlsm, .xls).
+    :type file_path: Union[str, Path]
+    :param sheet_name: Sheet identifier or index (default: 0).
+    :type sheet_name: Optional[Union[str, int]]
+    :param chunksize: Number of rows per yielded DataFrame chunk (default: 50 000).
+    :type chunksize: int
+    :return: Iterator yielding DataFrame slices.
+    :rtype: Iterator[pd.DataFrame]
+    :raises IragiDataError: If reading fails or file is not found.
+
+    Example:
+        >>> import tempfile
+        >>> import pandas as pd
+        >>> tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        >>> pd.DataFrame({"a": [1, 2, 3]}).to_excel(tmp.name, index=False)
+        >>> chunks = list(iter_excel_chunks(tmp.name, chunksize=2))
+        >>> len(chunks)
+        2
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"File not found: {path}")
+
+    _check_zip_bomb(path)
+
+    try:
+        if path.suffix.lower() == ".xlsx":
+            import openpyxl
+
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            try:
+                sheet_names = wb.sheetnames
+                target = (
+                    sheet_names[sheet_name]
+                    if isinstance(sheet_name, int)
+                    else (sheet_name or sheet_names[0])
+                )
+                ws = wb[target]
+                rows_gen = ws.iter_rows(values_only=True)
+                header = next(rows_gen, None)
+                if header is None:
+                    return
+
+                cols = list(header)
+                current_chunk = []
+                for row in rows_gen:
+                    current_chunk.append(row)
+                    if len(current_chunk) >= chunksize:
+                        chunk_df = pd.DataFrame(current_chunk, columns=cols)
+                        chunk_df.attrs["sheet_names"] = sheet_names
+                        chunk_df.attrs["sheet_name"] = str(target)
+                        yield chunk_df
+                        current_chunk = []
+
+                if current_chunk:
+                    chunk_df = pd.DataFrame(current_chunk, columns=cols)
+                    chunk_df.attrs["sheet_names"] = sheet_names
+                    chunk_df.attrs["sheet_name"] = str(target)
+                    yield chunk_df
+            finally:
+                wb.close()
+        else:
+            full_df = read_excel_file(path, sheet_name=sheet_name)
+            for i in range(0, len(full_df), chunksize):
+                chunk = full_df.iloc[i : i + chunksize].copy()
+                chunk.attrs["sheet_names"] = full_df.attrs.get("sheet_names", [])
+                chunk.attrs["sheet_name"] = full_df.attrs.get("sheet_name", str(sheet_name))
+                yield chunk
+    except Exception as exc:
+        raise IragiDataError(f"Failed streaming Excel chunks from '{path}': {exc}") from exc
+
+
 def read_parquet_file(file_path: Union[str, Path]) -> pd.DataFrame:
     """Read an Apache Parquet columnar file into a pandas DataFrame.
 

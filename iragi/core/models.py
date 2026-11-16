@@ -128,6 +128,21 @@ class DataInspectionResult:
     sheet_names: Optional[List[str]] = None
     analyzed_at: datetime = field(default_factory=datetime.now)
 
+    @property
+    def columns(self) -> List[str]:
+        """List names of all profiled columns in inspection order.
+
+        :return: List of column names.
+        :rtype: List[str]
+
+        Example:
+            >>> score = QualityScore(total_score=100.0)
+            >>> res = DataInspectionResult("data.csv", 10, 1, 0, 0, 0, 0, score, [ColumnProfile("age", "numeric", 10, 0, 10)])
+            >>> res.columns
+            ['age']
+        """
+        return [col.name for col in self.column_profiles]
+
 
 @dataclass
 class LogEntry:

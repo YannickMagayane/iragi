@@ -1,7 +1,8 @@
 """PDF Document extraction engine for Iragi.
 
 Provides text extraction via PyMuPDF (fitz), metadata parsing, scanned page
-detection, and structured multi-format document representations.
+detection, and structured multi-format document representations with streaming
+page support for large files.
 
 Example:
     >>> from iragi.pdf.extractor import extract_text_from_pdf, extract_metadata_from_pdf
@@ -9,10 +10,10 @@ Example:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 from iragi.core.exceptions import IragiDataError
 from iragi.pdf.models import ExtractedDocument, ExtractedPage, ExtractedTable
-from iragi.pdf.tables import extract_tables_from_pdf
+from iragi.pdf.tables import extract_tables_from_pdf, extract_tables_stream
 from iragi.pdf.ocr import is_page_likely_scanned, run_ocr_on_image
 
 
@@ -91,10 +92,98 @@ def extract_text_from_pdf(file_path: Union[str, Path]) -> str:
         raise IragiDataError(f"Failed to extract text from PDF '{path}': {exc}") from exc
 
 
+def iter_pdf_pages(
+    file_path: Union[str, Path],
+    batch_size: int = 10,
+    page_range: Optional[Tuple[int, int]] = None,
+    enable_ocr: bool = False,
+) -> Iterator[ExtractedPage]:
+    """Yield pages one by one from a PDF document to prevent excessive memory usage.
+
+    :param file_path: Path to target PDF file.
+    :type file_path: Union[str, Path]
+    :param batch_size: Number of pages processed per iteration batch (default: 10).
+    :type batch_size: int
+    :param page_range: Optional 1-based start and end page index tuple (inclusive).
+    :type page_range: Optional[Tuple[int, int]]
+    :param enable_ocr: Whether to run OCR on scanned pages lacking text.
+    :type enable_ocr: bool
+    :return: Iterator yielding ExtractedPage instances.
+    :rtype: Iterator[ExtractedPage]
+    :raises IragiDataError: If file is missing or unreadable.
+
+    Example:
+        >>> # for page in iter_pdf_pages("large_doc.pdf", batch_size=5):
+        >>> #     print(page.page_number, len(page.text))
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"PDF file not found: {path}")
+
+    try:
+        import pymupdf as fitz
+
+        doc = fitz.open(path)
+        total_pages = len(doc)
+        start_p = 1
+        end_p = total_pages
+        if page_range:
+            start_p = max(1, page_range[0])
+            end_p = min(total_pages, page_range[1])
+
+        try:
+            for idx in range(start_p, end_p + 1):
+                page = doc[idx - 1]
+                text = page.get_text() or ""
+                images = page.get_images()
+                is_scanned = is_page_likely_scanned(text, image_count=len(images))
+                if is_scanned and enable_ocr:
+                    pix = page.get_pixmap()
+                    from PIL import Image
+                    import io
+
+                    img = Image.open(io.BytesIO(pix.tobytes("png")))
+                    ocr_text = run_ocr_on_image(img)
+                    if ocr_text:
+                        text = ocr_text
+
+                yield ExtractedPage(
+                    page_number=idx,
+                    text=text,
+                    is_scanned=is_scanned,
+                    tables=[],
+                )
+        finally:
+            doc.close()
+    except Exception:
+        from pypdf import PdfReader
+
+        reader = PdfReader(path)
+        total_pages = len(reader.pages)
+        start_p = 1
+        end_p = total_pages
+        if page_range:
+            start_p = max(1, page_range[0])
+            end_p = min(total_pages, page_range[1])
+
+        for idx in range(start_p, end_p + 1):
+            p = reader.pages[idx - 1]
+            text = p.extract_text() or ""
+            is_scanned = len(text.strip()) == 0
+            yield ExtractedPage(
+                page_number=idx,
+                text=text,
+                is_scanned=is_scanned,
+                tables=[],
+            )
+
+
 def extract(
     file_path: Union[str, Path],
     extract_tables: bool = True,
     enable_ocr: bool = False,
+    page_range: Optional[Tuple[int, int]] = None,
+    max_pages: Optional[int] = None,
 ) -> ExtractedDocument:
     """Extract full content from a PDF document into an ExtractedDocument model.
 
@@ -104,6 +193,10 @@ def extract(
     :type extract_tables: bool
     :param enable_ocr: Whether to run OCR on scanned pages lacking text.
     :type enable_ocr: bool
+    :param page_range: Optional 1-based start and end page index tuple (inclusive).
+    :type page_range: Optional[Tuple[int, int]]
+    :param max_pages: Maximum total number of pages to process.
+    :type max_pages: Optional[int]
     :return: ExtractedDocument instance.
     :rtype: ExtractedDocument
     :raises IragiDataError: If parsing or extraction encounters a failure.
@@ -116,12 +209,14 @@ def extract(
         raise IragiDataError(f"PDF file not found: {path}")
 
     metadata = extract_metadata_from_pdf(path)
+    if max_pages and not page_range:
+        page_range = (1, max_pages)
 
     # Extract tables if enabled
     tables: List[ExtractedTable] = []
     if extract_tables:
         try:
-            tables = extract_tables_from_pdf(path)
+            tables = extract_tables_from_pdf(path, page_range=page_range)
         except Exception:
             tables = []
 
@@ -134,44 +229,14 @@ def extract(
     full_text_parts: List[str] = []
     requires_ocr = False
 
-    # Page-by-page inspection via PyMuPDF
-    try:
-        import pymupdf as fitz
-        doc = fitz.open(path)
-        for idx, page in enumerate(doc, start=1):
-            text = page.get_text() or ""
-            images = page.get_images()
-            is_scanned = is_page_likely_scanned(text, image_count=len(images))
-            if is_scanned:
-                requires_ocr = True
-                if enable_ocr:
-                    # Attempt pixmap rendering and OCR
-                    pix = page.get_pixmap()
-                    from PIL import Image
-                    import io
-                    img = Image.open(io.BytesIO(pix.tobytes("png")))
-                    ocr_text = run_ocr_on_image(img)
-                    if ocr_text:
-                        text = ocr_text
-
-            page_tables = tables_by_page.get(idx, [])
-            pages.append(ExtractedPage(page_number=idx, text=text, is_scanned=is_scanned, tables=page_tables))
-            if text:
-                full_text_parts.append(text)
-        doc.close()
-    except Exception:
-        # Fallback to pypdf
-        from pypdf import PdfReader
-        reader = PdfReader(path)
-        for idx, p in enumerate(reader.pages, start=1):
-            text = p.extract_text() or ""
-            is_scanned = len(text.strip()) == 0
-            if is_scanned:
-                requires_ocr = True
-            page_tables = tables_by_page.get(idx, [])
-            pages.append(ExtractedPage(page_number=idx, text=text, is_scanned=is_scanned, tables=page_tables))
-            if text:
-                full_text_parts.append(text)
+    for page_item in iter_pdf_pages(path, page_range=page_range, enable_ocr=enable_ocr):
+        page_tables = tables_by_page.get(page_item.page_number, [])
+        page_item.tables = page_tables
+        if page_item.is_scanned:
+            requires_ocr = True
+        pages.append(page_item)
+        if page_item.text:
+            full_text_parts.append(page_item.text)
 
     return ExtractedDocument(
         file_path=str(path),

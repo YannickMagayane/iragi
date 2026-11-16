@@ -8,9 +8,14 @@ Example:
     '0.5.0'
 """
 
-from iragi.scan import scan, scan_dataframe, scan_csv_stream
+from iragi.scan import scan, scan_dataframe, scan_csv_stream, scan_excel_stream
 from iragi.scan.contract import DataContract, ContractViolation, validate_contract
-from iragi.scan.readers import read_csv_chunked, iter_csv_chunks, read_parquet_file
+from iragi.scan.readers import (
+    read_csv_chunked,
+    iter_csv_chunks,
+    iter_excel_chunks,
+    read_parquet_file,
+)
 from iragi.scan.cleaner import auto_clean, CleaningResult
 from iragi.scan.drift import compare_scans, DriftReport
 from iragi.scan.profiler import detect_outliers_modified_zscore
@@ -28,13 +33,15 @@ import iragi.all as all
 scan.scan = scan
 scan.scan_dataframe = scan_dataframe
 scan.scan_csv_stream = scan_csv_stream
+scan.scan_excel_stream = scan_excel_stream
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = [
     "__version__",
     "scan",
     "scan_dataframe",
     "scan_csv_stream",
+    "scan_excel_stream",
     "analyze",
     "batch_analyze",
     "pdf",
@@ -44,6 +51,7 @@ __all__ = [
     "validate_contract",
     "read_csv_chunked",
     "iter_csv_chunks",
+    "iter_excel_chunks",
     "read_parquet_file",
     "auto_clean",
     "CleaningResult",

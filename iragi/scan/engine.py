@@ -446,6 +446,145 @@ def scan_csv_stream(
     )
 
 
+def scan_excel_stream(
+    file_path: Union[str, Path],
+    sheet_name: Optional[Union[str, int]] = 0,
+    chunksize: int = 50_000,
+    config: Optional[IragiConfig] = None,
+    critical_columns: Optional[List[str]] = None,
+    column_weights: Optional[Dict[str, float]] = None,
+) -> DataInspectionResult:
+    """Inspect and profile a large Excel spreadsheet in chunks with bounded memory.
+
+    :param file_path: Path to target Excel spreadsheet.
+    :type file_path: Union[str, Path]
+    :param sheet_name: Target sheet name or index (default: 0).
+    :type sheet_name: Optional[Union[str, int]]
+    :param chunksize: Number of rows per chunk (default: 50 000).
+    :type chunksize: int
+    :param config: Optional custom configuration instance.
+    :type config: Optional[IragiConfig]
+    :param critical_columns: Optional critical columns subjected to heavy penalties.
+    :type critical_columns: Optional[List[str]]
+    :param column_weights: Optional custom importance weights per column.
+    :type column_weights: Optional[Dict[str, float]]
+    :return: DataInspectionResult with accumulated quality metrics.
+    :rtype: DataInspectionResult
+
+    Example:
+        >>> # res = scan_excel_stream("large_data.xlsx", chunksize=10_000)
+    """
+    from iragi.scan.readers import iter_excel_chunks
+
+    cfg = config or get_default_config()
+    path = Path(file_path)
+
+    total_rows = 0
+    column_count = 0
+    missing_counts: Dict[str, int] = {}
+    samples_per_col: Dict[str, List[Any]] = {}
+    inferred_types: Dict[str, str] = {}
+    sheet_names: List[str] = []
+
+    for chunk in iter_excel_chunks(path, sheet_name=sheet_name, chunksize=chunksize):
+        if total_rows == 0:
+            column_count = int(chunk.shape[1])
+            sheet_names = chunk.attrs.get("sheet_names", [])
+            for col in chunk.columns:
+                str_col = str(col)
+                missing_counts[str_col] = 0
+                samples_per_col[str_col] = []
+                inferred_types[str_col] = infer_column_type(chunk[col])
+
+        total_rows += len(chunk)
+        for col in chunk.columns:
+            str_col = str(col)
+            missing_counts[str_col] += int(chunk[col].isna().sum())
+            if len(samples_per_col[str_col]) < 5000:
+                samples_per_col[str_col].extend(chunk[col].dropna().head(500).tolist())
+
+    total_missing = sum(missing_counts.values())
+
+    column_profiles: List[ColumnProfile] = []
+    total_outliers = 0
+    total_invalid_dates = 0
+
+    for col_name, inf_type in inferred_types.items():
+        m_count = missing_counts[col_name]
+        sample_series = pd.Series(samples_per_col[col_name])
+        outliers_count = 0
+        invalid_dates_count = 0
+
+        if inf_type == "numeric" and not sample_series.empty:
+            outliers_count = detect_outliers_iqr(sample_series, multiplier=cfg.outlier_iqr_multiplier)
+            total_outliers += outliers_count
+        elif inf_type == "datetime" and not sample_series.empty:
+            invalid_dates_count = detect_invalid_dates(sample_series)
+            total_invalid_dates += invalid_dates_count
+
+        summary_stats = compute_column_summary(sample_series, inf_type) if not sample_series.empty else {}
+
+        profile = ColumnProfile(
+            name=col_name,
+            inferred_type=inf_type,
+            total_count=total_rows,
+            missing_count=m_count,
+            unique_count=int(sample_series.nunique()) if not sample_series.empty else 0,
+            invalid_dates_count=invalid_dates_count,
+            outliers_count=outliers_count,
+            summary_stats=summary_stats,
+        )
+        column_profiles.append(profile)
+
+    empty_columns_count = sum(
+        1 for p in column_profiles if p.total_count > 0 and p.missing_count == p.total_count
+    )
+
+    critical_penalties: Dict[str, float] = {}
+    if critical_columns and total_rows > 0:
+        for col in critical_columns:
+            if col in missing_counts:
+                m_count = missing_counts[col]
+                if m_count > 0:
+                    ratio = m_count / total_rows
+                    critical_penalties[col] = round(min(30.0, max(10.0, ratio * 30.0)), 2)
+
+    quality_score = compute_quality_score(
+        row_count=total_rows,
+        column_count=column_count,
+        missing_count=total_missing,
+        duplicate_rows=0,
+        outliers_count=total_outliers,
+        invalid_dates_count=total_invalid_dates,
+        config=cfg,
+        empty_columns_count=empty_columns_count,
+        critical_columns_penalties=critical_penalties,
+        column_weights=column_weights,
+    )
+
+    recommendations = generate_recommendations(
+        missing_count=total_missing,
+        duplicate_rows=0,
+        outliers_count=total_outliers,
+        invalid_dates_count=total_invalid_dates,
+    )
+
+    return DataInspectionResult(
+        file_path=str(path),
+        row_count=total_rows,
+        column_count=column_count,
+        missing_values_count=total_missing,
+        duplicate_rows_count=0,
+        invalid_dates_count=total_invalid_dates,
+        potential_outliers_count=total_outliers,
+        quality_score=quality_score,
+        column_profiles=column_profiles,
+        recommendations=recommendations,
+        sheet_names=sheet_names,
+        analyzed_at=datetime.now(),
+    )
+
+
 def scan(
     file_path: Union[str, Path],
     config: Optional[IragiConfig] = None,
@@ -487,14 +626,25 @@ def scan(
         2
     """
     path = Path(file_path)
-    if stream and path.suffix.lower() in [".csv", ".tsv", ".txt"]:
-        return scan_csv_stream(
-            path,
-            chunksize=chunksize,
-            config=config,
-            delimiter=delimiter,
-            critical_columns=critical_columns,
-        )
+    if stream:
+        suf = path.suffix.lower()
+        if suf in [".csv", ".tsv", ".txt"]:
+            return scan_csv_stream(
+                path,
+                chunksize=chunksize,
+                config=config,
+                delimiter=delimiter,
+                critical_columns=critical_columns,
+            )
+        elif suf in [".xlsx", ".xls", ".xlsm"]:
+            return scan_excel_stream(
+                path,
+                sheet_name=sheet_name,
+                chunksize=chunksize,
+                config=config,
+                critical_columns=critical_columns,
+                column_weights=column_weights,
+            )
 
     df, _ = load_tabular_file(path, sheet_name=sheet_name, delimiter=delimiter)
     return scan_dataframe(
@@ -510,3 +660,4 @@ def scan(
 scan.scan = scan  # type: ignore[attr-defined]
 scan.scan_dataframe = scan_dataframe  # type: ignore[attr-defined]
 scan.scan_csv_stream = scan_csv_stream  # type: ignore[attr-defined]
+scan.scan_excel_stream = scan_excel_stream  # type: ignore[attr-defined]
