@@ -115,9 +115,16 @@ def analyze(
     suffix = path.suffix.lower()
 
     # Case 1: Tabular data file
-    if suffix in [".csv", ".tsv", ".txt", ".xlsx", ".xls", ".json", ".jsonl"]:
+    if suffix in [".csv", ".tsv", ".txt", ".xlsx", ".xls", ".xlsm", ".json", ".jsonl", ".parquet", ".pq"]:
         tabular_res = scan(path)
-        ftype = "csv" if suffix in [".csv", ".tsv", ".txt"] else ("excel" if "xls" in suffix else "json")
+        if suffix in [".csv", ".tsv", ".txt"]:
+            ftype = "csv"
+        elif suffix in [".xlsx", ".xls", ".xlsm"]:
+            ftype = "excel"
+        elif suffix in [".parquet", ".pq"]:
+            ftype = "parquet"
+        else:
+            ftype = "json"
         return UnifiedAnalysisResult(
             file_path=str(path),
             file_type=ftype,
@@ -257,7 +264,18 @@ def batch_analyze(
             files_to_process = [path]
         elif path.is_dir():
             pattern = "**/*" if recursive else "*"
-            supported_suffixes = {".csv", ".tsv", ".xlsx", ".xls", ".json", ".jsonl", ".pdf"}
+            supported_suffixes = {
+                ".csv",
+                ".tsv",
+                ".xlsx",
+                ".xls",
+                ".xlsm",
+                ".json",
+                ".jsonl",
+                ".parquet",
+                ".pq",
+                ".pdf",
+            }
             for item in path.glob(pattern):
                 if item.is_file() and item.suffix.lower() in supported_suffixes:
                     files_to_process.append(item)

@@ -155,6 +155,39 @@ def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None, 
     raise IragiDataError(f"Failed to parse CSV file '{path}': {last_error}")
 
 
+def _sanitize_column_names(header: Any) -> List[str]:
+    """Sanitize raw spreadsheet header labels into unique, non-empty string column names.
+
+    Replaces None, whitespace, and 'nan' labels with indexed placeholders (e.g. 'unnamed_0')
+    and appends numerical suffixes to duplicate names to ensure every DataFrame column is unique.
+
+    :param header: Raw iterable of header cells from spreadsheet parser.
+    :type header: Any
+    :return: List of clean, unique string column names.
+    :rtype: List[str]
+
+    Example:
+        >>> _sanitize_column_names([None, "Amount", None, "Amount", ""])
+        ['unnamed_0', 'Amount', 'unnamed_2', 'Amount_1', 'unnamed_4']
+    """
+    seen: Dict[str, int] = {}
+    clean_cols: List[str] = []
+    for idx, col in enumerate(header):
+        if col is None or str(col).strip() == "" or str(col).lower() in ("none", "nan"):
+            base = f"unnamed_{idx}"
+        else:
+            base = str(col).strip()
+
+        if base in seen:
+            seen[base] += 1
+            unique_name = f"{base}_{seen[base]}"
+        else:
+            seen[base] = 0
+            unique_name = base
+        clean_cols.append(unique_name)
+    return clean_cols
+
+
 def read_excel_file(
     file_path: Union[str, Path],
     sheet_name: Optional[Union[str, int]] = 0,
@@ -206,7 +239,8 @@ def read_excel_file(
                 if header is None:
                     df = pd.DataFrame()
                 else:
-                    df = pd.DataFrame(rows_gen, columns=list(header))
+                    cols = _sanitize_column_names(header)
+                    df = pd.DataFrame(rows_gen, columns=cols)
                 df.attrs["sheet_names"] = sheet_names
                 df.attrs["sheet_name"] = str(sheet_name)
                 return df
@@ -275,7 +309,7 @@ def iter_excel_chunks(
                 if header is None:
                     return
 
-                cols = list(header)
+                cols = _sanitize_column_names(header)
                 current_chunk = []
                 for row in rows_gen:
                     current_chunk.append(row)
