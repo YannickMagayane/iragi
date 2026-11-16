@@ -46,7 +46,6 @@ L'objectif est de fournir une bibliothèque réutilisable dans des scripts Pytho
 - [Architecture du projet](#architecture-du-projet)
 - [Socle technologique & Potentiel](#socle-technologique--fort-potentiel)
 - [Principes de conception](#principes-de-conception)
-- [Feuille de route](#feuille-de-route)
 - [Contribution](#contribution)
 - [Licence](#licence)
 
@@ -347,65 +346,6 @@ Grâce à son architecture découplée et composable, **Iragi s'intègre en quel
 6. **Gestion explicite des erreurs :** Aucune exception masquée silencieusement.
 7. **Dépendances optionnelles :** Un utilisateur de `iragi.scan` ne télécharge pas les dépendances de rendu PDF ou OCR.
 8. **Documentation exhaustive :** Chaque fonction, classe et module est documenté selon le standard Sphinx avec exemples.
-
----
-
-## Feuille de route
-
-### Phase 1 — Fondations
-- [x] Initialiser le dépôt et `pyproject.toml`.
-- [x] Définir les exceptions et les objets de résultat communs (`iragi.core`).
-- [x] Mettre en place les tests unitaires et l'intégration continue (`.github/workflows/ci.yml`).
-- [x] Configurer la génération de documentation Sphinx (`bin/docs`).
-- [x] Créer une première CLI de base.
-
-### Phase 2 — Moteur Scan
-- [x] Lire les fichiers CSV.
-- [x] Lire les fichiers Excel.
-- [x] Lire les fichiers JSON.
-- [x] Ajouter le profilage des colonnes.
-- [x] Détecter les valeurs manquantes et les doublons.
-- [x] Ajouter les validations de types et de formats.
-- [x] Produire un premier rapport JSON.
-
-### Phase 3 — Moteur PDF
-- [x] Extraire le texte avec PyMuPDF.
-- [x] Lire les métadonnées.
-- [x] Extraire les tableaux avec pdfplumber.
-- [x] Ajouter la détection des PDF nécessitant un OCR.
-- [x] Ajouter l'OCR comme dépendance optionnelle.
-- [x] Ajouter les exports structurés.
-
-### Phase 4 — Orchestration All
-- [x] Définir le pipeline commun.
-- [x] Connecter les résultats du moteur PDF au moteur Scan.
-- [x] Produire un rapport global.
-- [x] Ajouter le traitement par lots.
-
-### Phase 5 — Stabilisation et publication
-- [x] Vérifier la disponibilité du nom `iragi` sur PyPI (disponible).\
-- [x] Compléter les tests unitaires et d'intégration.
-- [x] Documenter les API publiques au fur et à mesure.
-- [x] Ajouter des exemples d'intégration Django et FastAPI.
-- [x] Vérifier les dépendances et les métadonnées du package.
-- [x] Publier la version v0.1.0 sur PyPI.
-
-### Phase 6 — Renforcement structurel (v0.3.0)
-- [x] Moteur de **contrats de données** (`DataContract`) avec règles personnalisables par colonne.
-- [x] **Lecture par morceaux** (`read_csv_chunked`) pour les fichiers CSV volumineux (> 1 Go).
-- [x] **Audit multi-onglets Excel** en mode batch (`excel_all_sheets=True`).
-- [x] 43 tests passants (10 nouveaux tests unitaires couvrant les 3 correctifs).
-
-### Phase 7 — Sécurité et Gouvernance Entreprise (v0.4.0)
-- [x] Moteur de **réconciliation inter-sources** (`iragi.reconcile`) avec détection des orphelins et conflits.
-- [x] Moteur de **remédiation automatique** (`iragi.auto_clean`) sans altération des sources.
-- [x] Détection de **dérive statistique** (`iragi.compare_scans`) entre deux dates d'audit.
-- [x] **Streaming réel Big Data** (`scan_csv_stream` et `iter_csv_chunks`) à mémoire strictement bornée.
-- [x] Protection contre les **attaques par injection CSV** et **bombes Zip/XML**.
-- [x] Protection **anti-ReDoS** avec timeout sur les expressions régulières.
-- [x] Algorithme d'outliers **Modified Z-Score** (médiane/MAD) pour distributions asymétriques.
-- [x] Pondération **anti-dilution** du score sur colonnes critiques et colonnes vides.
-- [x] 63 tests unitaires et d'intégration validés à 100 %.
 
 ---
 

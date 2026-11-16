@@ -41,7 +41,6 @@ Engineered for seamless integration into standalone Python scripts, Django appli
   - [End-to-End Analysis with All](#end-to-end-analysis-with-all)
 - [Command Line Interface (CLI)](#command-line-interface-cli)
 - [Technology Foundation & Potential](#technology-foundation--potential)
-- [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -342,20 +341,6 @@ Iragi is built on a battle-tested Python stack:
 - **ETL & Data Warehousing:** Automated schema validation and hygiene checks before loading into Lakehouses.
 - **Web Applications (Django / FastAPI):** Live validation of user-uploaded spreadsheets and PDF invoices.
 - **AI & LLM RAG Pipelines:** High-fidelity data preparation, structuring documents before vector indexing.
-
----
-
-## Roadmap
-
-- [x] **Phase 1 — Foundations:** Architecture, domain models, Sphinx tooling, CI/CD.
-- [x] **Phase 2 — Scan Engine:** Readers (CSV, Excel, JSON), statistical profiling, anomaly detection.
-- [x] **Phase 3 — PDF Engine:** Text extraction, metadata, table reconstruction, OCR detection heuristics.
-- [x] **Phase 4 — All Orchestration:** Unified pipeline, PDF-to-Scan bridge, batch processing.
-- [x] **Phase 5 — Production & PyPI:** 100% test coverage, Sphinx docs, PyPI automated deployment.
-- [x] **Phase 6 — Structural Hardening (v0.3.0):** Data Contracts engine, multi-sheet Excel batch, chunked CSV reading.
-- [x] **Phase 7 — Enterprise Governance & Security (v0.4.0):** Cross-source reconciliation (`iragi.reconcile`), auto-remediation (`auto_clean`), drift detection (`compare_scans`), true bounded-memory streaming (`scan_csv_stream`), ReDoS protection, CSV Formula Injection defense, Zip Bomb shielding, Modified Z-score outlier detection, and anti-dilution critical columns scoring.
-
----
 
 ---
 
