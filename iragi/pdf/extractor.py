@@ -1,0 +1,184 @@
+"""PDF Document extraction engine for Iragi.
+
+Provides text extraction via PyMuPDF (fitz), metadata parsing, scanned page
+detection, and structured multi-format document representations.
+
+Example:
+    >>> from iragi.pdf.extractor import extract_text_from_pdf, extract_metadata_from_pdf
+    >>> # text = extract_text_from_pdf("document.pdf")
+"""
+
+from pathlib import Path
+from typing import Any, Dict, List, Union, Optional
+from iragi.core.exceptions import IragiDataError
+from iragi.pdf.models import ExtractedDocument, ExtractedPage, ExtractedTable
+from iragi.pdf.tables import extract_tables_from_pdf
+from iragi.pdf.ocr import is_page_likely_scanned, run_ocr_on_image
+
+
+def extract_metadata_from_pdf(file_path: Union[str, Path]) -> Dict[str, Any]:
+    """Extract standard document metadata properties from a PDF.
+
+    :param file_path: Path to target PDF file.
+    :type file_path: Union[str, Path]
+    :return: Dictionary containing title, author, producer, creation date, etc.
+    :rtype: Dict[str, Any]
+    :raises IragiDataError: If file is missing or unreadable.
+
+    Example:
+        >>> # meta = extract_metadata_from_pdf("document.pdf")
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"PDF file not found: {path}")
+
+    # Try PyMuPDF first
+    try:
+        import pymupdf as fitz
+        doc = fitz.open(path)
+        meta = dict(doc.metadata) if doc.metadata else {}
+        meta["page_count"] = len(doc)
+        doc.close()
+        return meta
+    except Exception:
+        pass
+
+    # Fallback to pypdf
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(path)
+        raw_meta = reader.metadata or {}
+        meta = {str(k).replace("/", ""): str(v) for k, v in raw_meta.items()}
+        meta["page_count"] = len(reader.pages)
+        return meta
+    except Exception as exc:
+        raise IragiDataError(f"Failed to read PDF metadata from '{path}': {exc}") from exc
+
+
+def extract_text_from_pdf(file_path: Union[str, Path]) -> str:
+    """Extract all raw text content across all pages of a PDF document.
+
+    :param file_path: Path to target PDF file.
+    :type file_path: Union[str, Path]
+    :return: Full extracted text string.
+    :rtype: str
+    :raises IragiDataError: If extraction fails.
+
+    Example:
+        >>> # text = extract_text_from_pdf("document.pdf")
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"PDF file not found: {path}")
+
+    # PyMuPDF
+    try:
+        import pymupdf as fitz
+        doc = fitz.open(path)
+        pages_text = [page.get_text() for page in doc]
+        doc.close()
+        return "\n\n".join(pages_text).strip()
+    except Exception:
+        pass
+
+    # Fallback to pypdf
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(path)
+        pages_text = [p.extract_text() or "" for p in reader.pages]
+        return "\n\n".join(pages_text).strip()
+    except Exception as exc:
+        raise IragiDataError(f"Failed to extract text from PDF '{path}': {exc}") from exc
+
+
+def extract(
+    file_path: Union[str, Path],
+    extract_tables: bool = True,
+    enable_ocr: bool = False,
+) -> ExtractedDocument:
+    """Extract full content from a PDF document into an ExtractedDocument model.
+
+    :param file_path: Path to target PDF file.
+    :type file_path: Union[str, Path]
+    :param extract_tables: Whether to detect and extract tabular grids.
+    :type extract_tables: bool
+    :param enable_ocr: Whether to run OCR on scanned pages lacking text.
+    :type enable_ocr: bool
+    :return: ExtractedDocument instance.
+    :rtype: ExtractedDocument
+    :raises IragiDataError: If parsing or extraction encounters a failure.
+
+    Example:
+        >>> # doc = extract("document.pdf")
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"PDF file not found: {path}")
+
+    metadata = extract_metadata_from_pdf(path)
+
+    # Extract tables if enabled
+    tables: List[ExtractedTable] = []
+    if extract_tables:
+        try:
+            tables = extract_tables_from_pdf(path)
+        except Exception:
+            tables = []
+
+    # Map tables by page number
+    tables_by_page: Dict[int, List[ExtractedTable]] = {}
+    for tbl in tables:
+        tables_by_page.setdefault(tbl.page_number, []).append(tbl)
+
+    pages: List[ExtractedPage] = []
+    full_text_parts: List[str] = []
+    requires_ocr = False
+
+    # Page-by-page inspection via PyMuPDF
+    try:
+        import pymupdf as fitz
+        doc = fitz.open(path)
+        for idx, page in enumerate(doc, start=1):
+            text = page.get_text() or ""
+            images = page.get_images()
+            is_scanned = is_page_likely_scanned(text, image_count=len(images))
+            if is_scanned:
+                requires_ocr = True
+                if enable_ocr:
+                    # Attempt pixmap rendering and OCR
+                    pix = page.get_pixmap()
+                    from PIL import Image
+                    import io
+                    img = Image.open(io.BytesIO(pix.tobytes("png")))
+                    ocr_text = run_ocr_on_image(img)
+                    if ocr_text:
+                        text = ocr_text
+
+            page_tables = tables_by_page.get(idx, [])
+            pages.append(ExtractedPage(page_number=idx, text=text, is_scanned=is_scanned, tables=page_tables))
+            if text:
+                full_text_parts.append(text)
+        doc.close()
+    except Exception:
+        # Fallback to pypdf
+        from pypdf import PdfReader
+        reader = PdfReader(path)
+        for idx, p in enumerate(reader.pages, start=1):
+            text = p.extract_text() or ""
+            is_scanned = len(text.strip()) == 0
+            if is_scanned:
+                requires_ocr = True
+            page_tables = tables_by_page.get(idx, [])
+            pages.append(ExtractedPage(page_number=idx, text=text, is_scanned=is_scanned, tables=page_tables))
+            if text:
+                full_text_parts.append(text)
+
+    return ExtractedDocument(
+        file_path=str(path),
+        page_count=len(pages),
+        metadata=metadata,
+        pages=pages,
+        full_text="\n\n".join(full_text_parts).strip(),
+        tables=tables,
+        requires_ocr=requires_ocr,
+    )
