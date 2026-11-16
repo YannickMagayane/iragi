@@ -14,7 +14,7 @@ import json
 import re
 import zipfile
 from pathlib import Path
-from typing import Iterator, Tuple, Union, Optional
+from typing import Any, Iterator, List, Tuple, Union, Optional
 import pandas as pd
 from iragi.core.exceptions import IragiDataError
 
