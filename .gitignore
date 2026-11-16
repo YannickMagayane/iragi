@@ -1,0 +1,61 @@
+# Virtual Environments
+.env/
+env/
+venv/
+ENV/
+.venv/
+
+# Environment Variables and Credentials
+.env*
+!.env.example
+.pypirc
+
+# Python Bytecode and Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution and Packaging
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing and Coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+
+# Documentation Build Output
+docs/build/
+docs/source/api/
+docs/source/readme.md
+
+# IDE and Editor Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs and SQLite local DBs
+*.log
+.iragi/
+*.sqlite3
+history.db

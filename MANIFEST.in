@@ -1,0 +1,14 @@
+include README.md
+include LICENSE
+include pyproject.toml
+
+recursive-include iragi *.py
+
+# Exclude private, virtualenv and local files
+global-exclude *.py[cod] __pycache__ *.so
+prune .env
+prune bin
+prune docs
+prune tests
+prune dist
+prune build
