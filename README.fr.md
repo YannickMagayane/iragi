@@ -376,20 +376,76 @@ for table in extract_tables_stream("document_volumineux.pdf"):
 Iragi dispose d'une interface en ligne de commande moderne et intuitive construite avec `typer` et mise en forme avec `rich`.
 
 ```bash
-# Inspection de fichiers tabulaires
+# Inspection de fichiers locaux
 iragi scan data.csv
 iragi scan data.xlsx --sheet "Ventes"
 iragi scan data.json --output report.json
+
+# Inspection directe d'un fichier distant via URL
+iragi scan https://data.gov/resources/air_quality_annual.csv
 
 # Extraction PDF
 iragi pdf text document.pdf
 iragi pdf tables document.pdf --format csv --output ./tables/
 iragi pdf metadata document.pdf
 
-# Pipeline complet
-iragi all document.pdf
+# Pipeline complet sur un fichier distant
+iragi all https://www.insee.fr/en/statistiques/fichier/emploi_2026.xlsx
 iragi all document.pdf --report html --output ./reports/audit.html
 ```
+
+---
+
+## Ingestion de fichiers distants et cloud
+
+Iragi accepte n'importe quelle URL HTTP, HTTPS ou FTP partout ou un chemin de fichier local est attendu.
+Aucune configuration n'est necessaire. Les fichiers sont telecharges de maniere transparente, analyses en memoire,
+et la copie temporaire est supprimee automatiquement.
+
+### Sources prises en charge
+
+- **Portails Open Data :** data.gov, data.world, Kaggle, INSEE, OMS, Eurostat
+- **Stockage cloud :** URLs presignees AWS S3, Google Cloud Storage, Azure Blob Storage
+- **Tout lien de telechargement direct :** jeux de donnees de recherche, rapports financiers, telemetrie capteurs
+
+### Exemples
+
+```python
+import iragi
+
+# Inspecter un CSV directement depuis un portail de donnees ouvertes
+result = iragi.scan("https://data.gov/resources/air_quality_annual.csv")
+print(f"Lignes : {result.row_count}, Score : {result.quality_score.total_score}/100")
+
+# Inspecter un fichier Parquet depuis Google Cloud Storage
+result = iragi.scan("https://storage.googleapis.com/climate/co2_monitoring.parquet")
+print(f"Colonnes : {result.columns}")
+
+# Analyse unifiee complete sur un rapport Excel gouvernemental distant
+res = iragi.analyze("https://www.insee.fr/en/statistiques/fichier/emploi_2026.xlsx")
+print(f"Type de fichier : {res.file_type}, Score : {res.overall_quality_score}/100")
+
+# Analyse en lot d'un mix de fichiers locaux et distants (tout type, tout domaine)
+results = iragi.batch_analyze([
+    "donnees_locales/ventes_internes.csv",
+    "https://opendata.health.org/essais_cliniques.parquet",
+    "https://s3.amazonaws.com/mybucket/logistique/expeditions.xlsx",
+    "https://ftp.gov.org/archive/population_2026.json",
+])
+for r in results:
+    print(f"{r.file_path} : {r.overall_quality_score}/100")
+```
+
+### Garanties de securite
+
+| Protection | Valeur par defaut |
+|---|---|
+| Taille maximale du fichier | 500 Mo |
+| Timeout reseau | 30 secondes |
+| Nettoyage du fichier temporaire | Automatique (toujours) |
+
+> **Note :** Les buckets S3 et GCS prives necessitent des URLs presignees. Iragi telecharge toute URL HTTPS,
+> donc les URLs presignees fonctionnent sans configuration supplementaire ni identifiants AWS/GCP.
 
 ---
 

@@ -383,8 +383,11 @@ Iragi includes a rich CLI built with Typer and Rich:
 # Check version
 iragi version
 
-# Inspect a tabular file in the terminal
+# Inspect a local file
 iragi scan data.csv
+
+# Inspect a remote file directly from a URL
+iragi scan https://data.gov/resources/air_quality_annual.csv
 
 # Export scan results to JSON
 iragi scan data.xlsx --output report.json
@@ -395,9 +398,62 @@ iragi pdf text document.pdf
 # Extract tables from PDF
 iragi pdf tables document.pdf
 
-# Run unified pipeline
-iragi all report.pdf
+# Run unified pipeline on a remote file
+iragi all https://www.insee.fr/en/statistiques/fichier/emploi_2026.xlsx
 ```
+
+---
+
+## Remote and Cloud File Ingestion
+
+Iragi accepts any HTTP, HTTPS, or FTP URL wherever a local file path is expected.
+No configuration is needed. Files are fetched transparently, inspected in memory, and the
+temporary copy is deleted automatically.
+
+### Supported sources
+
+- **Open Data portals:** data.gov, data.world, Kaggle, INSEE, WHO, Eurostat
+- **Cloud storage:** AWS S3 presigned URLs, Google Cloud Storage, Azure Blob Storage
+- **Any direct download link:** research datasets, financial reports, sensor telemetry
+
+### Examples
+
+```python
+import iragi
+
+# Inspect a CSV directly from an open data portal
+result = iragi.scan("https://data.gov/resources/air_quality_annual.csv")
+print(f"Rows: {result.row_count}, Score: {result.quality_score.total_score}/100")
+
+# Inspect a Parquet file from Google Cloud Storage
+result = iragi.scan("https://storage.googleapis.com/climate/co2_monitoring.parquet")
+print(f"Columns: {result.columns}")
+
+# Full unified analysis on a remote Excel government report
+res = iragi.analyze("https://www.insee.fr/en/statistiques/fichier/emploi_2026.xlsx")
+print(f"File type: {res.file_type}, Score: {res.overall_quality_score}/100")
+
+# Batch-analyze a mix of local and remote files (any file type, any domain)
+results = iragi.batch_analyze([
+    "local_data/internal_sales.csv",
+    "https://opendata.health.org/clinical_trials.parquet",
+    "https://s3.amazonaws.com/mybucket/logistics/shipments.xlsx",
+    "https://ftp.gov.org/archive/population_2026.json",
+])
+for r in results:
+    print(f"{r.file_path}: {r.overall_quality_score}/100")
+```
+
+### Safety guarantees
+
+| Protection | Default value |
+|---|---|
+| Maximum file size | 500 MB |
+| Network timeout | 30 seconds |
+| Temporary file cleanup | Automatic (always) |
+
+> **Note:** S3 and GCS private buckets require presigned URLs. Iragi fetches any HTTPS URL,
+> so presigned URLs work out of the box without additional configuration or AWS/GCP credentials.
 
 ---
 

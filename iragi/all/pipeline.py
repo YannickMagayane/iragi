@@ -16,6 +16,7 @@ import pandas as pd
 
 from iragi.core.exceptions import IragiDataError
 from iragi.core.models import DataInspectionResult, QualityScore
+from iragi.core.remote import is_remote_url, resolve_file_source
 from iragi.pdf.extractor import extract
 from iragi.pdf.models import ExtractedDocument
 from iragi.scan.engine import scan, scan_dataframe
@@ -108,65 +109,69 @@ def analyze(
         >>> res.file_type
         'csv'
     """
-    path = Path(file_path)
-    if not path.is_file():
-        raise IragiDataError(f"Target file not found: {path}")
+    path, is_temp = resolve_file_source(file_path)
+    try:
+        if not path.is_file():
+            raise IragiDataError(f"Target file not found: {path}")
 
-    suffix = path.suffix.lower()
+        suffix = path.suffix.lower()
 
-    # Case 1: Tabular data file
-    if suffix in [".csv", ".tsv", ".txt", ".xlsx", ".xls", ".xlsm", ".json", ".jsonl", ".parquet", ".pq"]:
-        tabular_res = scan(path)
-        if suffix in [".csv", ".tsv", ".txt"]:
-            ftype = "csv"
-        elif suffix in [".xlsx", ".xls", ".xlsm"]:
-            ftype = "excel"
-        elif suffix in [".parquet", ".pq"]:
-            ftype = "parquet"
-        else:
-            ftype = "json"
-        return UnifiedAnalysisResult(
-            file_path=str(path),
-            file_type=ftype,
-            document=None,
-            tabular_inspections=[tabular_res],
-            overall_quality_score=tabular_res.quality_score.total_score,
-            recommendations=tabular_res.recommendations,
-            analyzed_at=datetime.now(),
-        )
+        # Case 1: Tabular data file
+        if suffix in [".csv", ".tsv", ".txt", ".xlsx", ".xls", ".xlsm", ".json", ".jsonl", ".parquet", ".pq"]:
+            tabular_res = scan(path)
+            if suffix in [".csv", ".tsv", ".txt"]:
+                ftype = "csv"
+            elif suffix in [".xlsx", ".xls", ".xlsm"]:
+                ftype = "excel"
+            elif suffix in [".parquet", ".pq"]:
+                ftype = "parquet"
+            else:
+                ftype = "json"
+            return UnifiedAnalysisResult(
+                file_path=str(path),
+                file_type=ftype,
+                document=None,
+                tabular_inspections=[tabular_res],
+                overall_quality_score=tabular_res.quality_score.total_score,
+                recommendations=tabular_res.recommendations,
+                analyzed_at=datetime.now(),
+            )
 
-    # Case 2: PDF Document
-    if suffix == ".pdf":
-        doc = extract(path, extract_tables=True, enable_ocr=enable_ocr)
-        tabular_inspections: List[DataInspectionResult] = []
-        scores: List[float] = []
-        all_recs: List[str] = []
+        # Case 2: PDF Document
+        if suffix == ".pdf":
+            doc = extract(path, extract_tables=True, enable_ocr=enable_ocr)
+            tabular_inspections: List[DataInspectionResult] = []
+            scores: List[float] = []
+            all_recs: List[str] = []
 
-        for idx, table in enumerate(doc.tables, start=1):
-            df = table.to_dataframe()
-            if not df.empty:
-                table_source_name = f"{path.name} [Page {table.page_number} Table #{idx}]"
-                inspection = scan_dataframe(df, source_name=table_source_name)
-                tabular_inspections.append(inspection)
-                scores.append(inspection.quality_score.total_score)
-                all_recs.extend(inspection.recommendations)
+            for idx, table in enumerate(doc.tables, start=1):
+                df = table.to_dataframe()
+                if not df.empty:
+                    table_source_name = f"{path.name} [Page {table.page_number} Table #{idx}]"
+                    inspection = scan_dataframe(df, source_name=table_source_name)
+                    tabular_inspections.append(inspection)
+                    scores.append(inspection.quality_score.total_score)
+                    all_recs.extend(inspection.recommendations)
 
-        if doc.requires_ocr and not enable_ocr:
-            all_recs.append("Detected potential scanned pages with missing text layer. Consider re-running with OCR enabled.")
+            if doc.requires_ocr and not enable_ocr:
+                all_recs.append("Detected potential scanned pages with missing text layer. Consider re-running with OCR enabled.")
 
-        avg_score = round(sum(scores) / len(scores), 2) if scores else 100.0
+            avg_score = round(sum(scores) / len(scores), 2) if scores else 100.0
 
-        return UnifiedAnalysisResult(
-            file_path=str(path),
-            file_type="pdf",
-            document=doc,
-            tabular_inspections=tabular_inspections,
-            overall_quality_score=avg_score,
-            recommendations=list(dict.fromkeys(all_recs)),
-            analyzed_at=datetime.now(),
-        )
+            return UnifiedAnalysisResult(
+                file_path=str(path),
+                file_type="pdf",
+                document=doc,
+                tabular_inspections=tabular_inspections,
+                overall_quality_score=avg_score,
+                recommendations=list(dict.fromkeys(all_recs)),
+                analyzed_at=datetime.now(),
+            )
 
-    raise IragiDataError(f"Unsupported file format '{suffix}' for unified analysis.")
+        raise IragiDataError(f"Unsupported file format '{suffix}' for unified analysis.")
+    finally:
+        if is_temp:
+            path.unlink(missing_ok=True)
 
 
 def _analyze_excel_all_sheets(
@@ -254,10 +259,10 @@ def batch_analyze(
         >>> # results = batch_analyze(["report.xlsx"], excel_all_sheets=True)
         >>> # assert len(results) == number_of_sheets
     """
-    files_to_process: List[Path] = []
+    files_to_process: List[Union[str, Path]] = []
 
     if isinstance(target_path, list):
-        files_to_process = [Path(p) for p in target_path]
+        files_to_process = list(target_path)
     else:
         path = Path(target_path)
         if path.is_file():
@@ -283,17 +288,18 @@ def batch_analyze(
     results: List[UnifiedAnalysisResult] = []
     for file_item in files_to_process:
         try:
-            if excel_all_sheets and file_item.suffix.lower() in {".xlsx", ".xls", ".xlsm"}:
-                results.extend(_analyze_excel_all_sheets(file_item, enable_ocr=enable_ocr))
+            if not is_remote_url(file_item) and Path(file_item).suffix.lower() in {".xlsx", ".xls", ".xlsm"} and excel_all_sheets:
+                results.extend(_analyze_excel_all_sheets(Path(file_item), enable_ocr=enable_ocr))
             else:
                 res = analyze(file_item, enable_ocr=enable_ocr)
                 results.append(res)
         except Exception as exc:
             if raise_on_error:
                 raise
+            suffix_str = Path(str(file_item)).suffix.lower().lstrip(".")
             error_res = UnifiedAnalysisResult(
                 file_path=str(file_item),
-                file_type=file_item.suffix.lower().lstrip("."),
+                file_type=suffix_str,
                 overall_quality_score=0.0,
                 success=False,
                 error=str(exc),

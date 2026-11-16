@@ -625,35 +625,40 @@ def scan(
         >>> res.row_count
         2
     """
-    path = Path(file_path)
-    if stream:
-        suf = path.suffix.lower()
-        if suf in [".csv", ".tsv", ".txt"]:
-            return scan_csv_stream(
-                path,
-                chunksize=chunksize,
-                config=config,
-                delimiter=delimiter,
-                critical_columns=critical_columns,
-            )
-        elif suf in [".xlsx", ".xls", ".xlsm"]:
-            return scan_excel_stream(
-                path,
-                sheet_name=sheet_name,
-                chunksize=chunksize,
-                config=config,
-                critical_columns=critical_columns,
-                column_weights=column_weights,
-            )
+    from iragi.core.remote import resolve_file_source
+    path, is_temp = resolve_file_source(file_path)
+    try:
+        if stream:
+            suf = path.suffix.lower()
+            if suf in [".csv", ".tsv", ".txt"]:
+                return scan_csv_stream(
+                    path,
+                    chunksize=chunksize,
+                    config=config,
+                    delimiter=delimiter,
+                    critical_columns=critical_columns,
+                )
+            elif suf in [".xlsx", ".xls", ".xlsm"]:
+                return scan_excel_stream(
+                    path,
+                    sheet_name=sheet_name,
+                    chunksize=chunksize,
+                    config=config,
+                    critical_columns=critical_columns,
+                    column_weights=column_weights,
+                )
 
-    df, _ = load_tabular_file(path, sheet_name=sheet_name, delimiter=delimiter)
-    return scan_dataframe(
-        df,
-        source_name=str(path),
-        config=config,
-        critical_columns=critical_columns,
-        column_weights=column_weights,
-    )
+        df, _ = load_tabular_file(path, sheet_name=sheet_name, delimiter=delimiter)
+        return scan_dataframe(
+            df,
+            source_name=str(path),
+            config=config,
+            critical_columns=critical_columns,
+            column_weights=column_weights,
+        )
+    finally:
+        if is_temp:
+            path.unlink(missing_ok=True)
 
 
 # Self-reference for API compatibility: allows both scan(...) and scan.scan(...)
