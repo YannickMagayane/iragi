@@ -49,7 +49,7 @@ echo "Current version : $CURRENT_VERSION"
 # 3. Bump version across all configured files
 # ---------------------------------------------------------------------------
 echo "Bumping $PART..."
-"$VENV_DIR/bin/bump-my-version" bump "$PART" --verbose
+"${PROJECT_ROOT}/.env/bin/bump-my-version" bump "$PART" --verbose
 
 # Read new version after the bump
 NEW_VERSION=$(grep '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')

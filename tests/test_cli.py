@@ -10,6 +10,7 @@ Example:
 import tempfile
 from pathlib import Path
 from typer.testing import CliRunner
+import iragi
 from iragi.cli.main import app
 
 runner = CliRunner()
@@ -25,7 +26,7 @@ def test_cli_version_command() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
     assert "Iragi version:" in result.stdout
-    assert "0.1.0" in result.stdout
+    assert iragi.__version__ in result.stdout
 
 
 def test_cli_scan_command_with_csv() -> None:

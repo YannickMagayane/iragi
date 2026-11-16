@@ -1,6 +1,11 @@
 name: Publish to PyPI & Documentation Build
 
 on:
+  workflow_run:
+    workflows: ["Continuous Integration"]
+    branches: [main]
+    types:
+      - completed
   release:
     types: [published]
   workflow_dispatch:
@@ -13,6 +18,7 @@ permissions:
 jobs:
   build-docs:
     name: Build & Verify Sphinx Documentation
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -45,7 +51,11 @@ jobs:
   publish-pypi:
     name: Build & Publish Package to PyPI
     needs: [build-docs]
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -71,4 +81,4 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
