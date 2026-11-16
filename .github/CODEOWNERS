@@ -1,0 +1,15 @@
+# GitHub CODEOWNERS
+# Verrouillage et gouvernance : toute modification dans ces répertoires
+# requiert obligatoirement l'approbation explicite de @YannickMagayane.
+
+# Par défaut, Yannick Magayane est le seul propriétaire de l'ensemble du projet
+* @YannickMagayane
+
+# Les tests unitaires et d'intégration ne peuvent être modifiés sans revue obligatoire
+/tests/ @YannickMagayane
+
+# La configuration CI/CD et les workflows de publication PyPI
+/.github/ @YannickMagayane
+
+# La configuration de packaging et les dépendances
+/pyproject.toml @YannickMagayane
