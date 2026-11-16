@@ -84,13 +84,13 @@ Le moteur Scan analyse les fichiers structurés ou textuels afin d'en comprendre
 - **Contrôle de complétude :** valeurs manquantes, vides ou nulles.
 - **Détection des doublons :** lignes redondantes ou quasi-doublons.
 - **Détection des types incohérents :** formats de dates invalides, anomalies numériques (y compris colonnes de prix formatées).
-- **Repérage d'anomalies statistiques :** outliers via méthode IQR configurable.
-- **Statistiques descriptives :** moyennes, médianes, min/max, percentiles.
-- **Score indicatif de qualité :** score pondéré et explicable sur 100 avec détail des pénalités.
-- **Recommandations exploitables :** conseils de nettoyage et d'assainissement ciblés.
-- **Contrats de données :** déclarez et appliquez des règles métier personnalisées par colonne (`not_null`, `positive`, `range`, `regex`).
-- **Lecture par morceaux (chunking) :** `read_csv_chunked()` traite les gros fichiers CSV par tranches configurables sans saturer la mémoire vive.
-- **Nettoyage explicite :** aucune mutation destructive du fichier source ; production de nouveaux artefacts nettoyés.
+- **Repérage d'anomalies statistiques :** outliers via méthode IQR et **Modified Z-Score** (médiane et MAD) pour données asymétriques (Pareto, Poisson).
+- **Score indicatif de qualité :** score pondéré sur 100 avec pénalités transparentes, pénalisation automatique des colonnes 100% vides et protection anti-dilution sur les colonnes critiques.
+- **Contrats de données (`DataContract`) :** déclarez et appliquez des règles métier par colonne (`not_null`, `positive`, `range`, `regex` avec **protection anti-ReDoS**).
+- **Nettoyage automatique (`auto_clean`) :** remédiation non destructive (déduplication, imputation moyenne/médiane numérique, imputation mode catégorielle).
+- **Détection de dérive (`compare_scans`) :** comparaison de deux scans dans le temps pour identifier les dérives statistiques de qualité.
+- **Streaming réel Big Data (`scan_csv_stream` / `iter_csv_chunks`) :** audit de fichiers CSV multi-gigaoctets avec consommation mémoire constante et bornée en O(chunksize).
+- **Sécurité entreprise :** assainissement des formules CSV (`sanitize_formulas=True`) et détection préventive des bombes Zip/XML Excel.
 
 ### 2. `iragi.pdf` — Extraction de documents PDF
 
@@ -105,7 +105,15 @@ Le moteur PDF se concentre sur l'extraction, la structuration et la numérisatio
 - **OCR facultatif :** reconnaissance optique de caractères pour documents numérisés via Tesseract.
 - **Exports multi-formats :** exports directs en JSON, CSV, Excel ou Markdown.
 
-### 3. `iragi.all` — Orchestration des moteurs
+### 3. `iragi.reconcile` — Réconciliation et rapprochement inter-sources
+
+Le moteur de réconciliation permet de croiser et rapprocher deux sources de données hétérogènes (CSV, Excel ou tableaux extraits de PDF) :
+- **Rapprochement par clé :** jointure et appariement sur identifiants simples ou composites.
+- **Identification des orphelins :** extraction immédiate des enregistrements présents dans la source A mais absents de B (et inversement).
+- **Détection des conflits de valeurs :** identification colonne par colonne des désaccords sur les lignes appariées.
+- **Taux de rapprochement :** calcul du pourcentage exact d'alignement des sources.
+
+### 4. `iragi.all` — Orchestration des moteurs
 
 Le module All combine les moteurs Scan et PDF dans un pipeline unifié et cohérent.
 
@@ -117,7 +125,7 @@ Le module All combine les moteurs Scan et PDF dans un pipeline unifié et cohér
 5. Audit de conformité et calcul du score de qualité des données extraites.
 6. Génération d'un rapport consolidé traçable (JSON, HTML ou console).
 
-**Nouveautés v0.3.0 :**
+**Nouveautés v0.4.0 :**
 - **Audit multi-onglets Excel :** `batch_analyze([...], excel_all_sheets=True)` analyse chaque onglet d'un classeur indépendamment, au lieu de ne lire que le premier.
 - **Gestion des erreurs tracée :** les fichiers en erreur dans un lot produisent un résultat explicite (`success=False`, `error=...`) au lieu d'être silencieusement ignorés.
 
@@ -387,6 +395,17 @@ Grâce à son architecture découplée et composable, **Iragi s'intègre en quel
 - [x] **Lecture par morceaux** (`read_csv_chunked`) pour les fichiers CSV volumineux (> 1 Go).
 - [x] **Audit multi-onglets Excel** en mode batch (`excel_all_sheets=True`).
 - [x] 43 tests passants (10 nouveaux tests unitaires couvrant les 3 correctifs).
+
+### Phase 7 — Sécurité et Gouvernance Entreprise (v0.4.0)
+- [x] Moteur de **réconciliation inter-sources** (`iragi.reconcile`) avec détection des orphelins et conflits.
+- [x] Moteur de **remédiation automatique** (`iragi.auto_clean`) sans altération des sources.
+- [x] Détection de **dérive statistique** (`iragi.compare_scans`) entre deux dates d'audit.
+- [x] **Streaming réel Big Data** (`scan_csv_stream` et `iter_csv_chunks`) à mémoire strictement bornée.
+- [x] Protection contre les **attaques par injection CSV** et **bombes Zip/XML**.
+- [x] Protection **anti-ReDoS** avec timeout sur les expressions régulières.
+- [x] Algorithme d'outliers **Modified Z-Score** (médiane/MAD) pour distributions asymétriques.
+- [x] Pondération **anti-dilution** du score sur colonnes critiques et colonnes vides.
+- [x] 63 tests unitaires et d'intégration validés à 100 %.
 
 ---
 

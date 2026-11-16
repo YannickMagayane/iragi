@@ -15,13 +15,19 @@ Example:
 """
 
 from pathlib import Path
-from typing import List, Tuple, Union, Optional
+from typing import Any, Dict, List, Tuple, Union, Optional
 from datetime import datetime
 import pandas as pd
 from iragi.core.config import IragiConfig, get_default_config
-from iragi.core.models import QualityScore, DataInspectionResult
+from iragi.core.models import QualityScore, DataInspectionResult, ColumnProfile
 from iragi.scan.readers import load_tabular_file
-from iragi.scan.profiler import profile_dataframe
+from iragi.scan.profiler import (
+    profile_dataframe,
+    infer_column_type,
+    detect_outliers_iqr,
+    detect_invalid_dates,
+    compute_column_summary,
+)
 
 
 def compute_quality_score(
@@ -32,8 +38,13 @@ def compute_quality_score(
     outliers_count: int,
     invalid_dates_count: int,
     config: IragiConfig,
+    empty_columns_count: int = 0,
+    critical_columns_penalties: Optional[Dict[str, float]] = None,
 ) -> QualityScore:
     """Calculate an explainable data quality score on a 0-100 scale.
+
+    Includes penalty deductions for missing cells, duplicate rows, statistical
+    outliers, invalid dates, completely empty columns, and critical columns.
 
     :param row_count: Number of rows in dataset.
     :type row_count: int
@@ -49,6 +60,10 @@ def compute_quality_score(
     :type invalid_dates_count: int
     :param config: Runtime scoring weights configuration.
     :type config: IragiConfig
+    :param empty_columns_count: Number of columns that are 100% null.
+    :type empty_columns_count: int
+    :param critical_columns_penalties: Mapping of critical column names to penalty points.
+    :type critical_columns_penalties: Optional[Dict[str, float]]
     :return: QualityScore instance with exact deduction breakdown.
     :rtype: QualityScore
 
@@ -76,7 +91,17 @@ def compute_quality_score(
     outlier_penalty = round(outlier_ratio * config.outlier_penalty_weight, 2)
     invalid_date_penalty = round(invalid_date_ratio * config.invalid_date_penalty_weight, 2)
 
-    total_deductions = missing_penalty + duplicate_penalty + outlier_penalty + invalid_date_penalty
+    empty_column_penalty = round(min(30.0, empty_columns_count * 15.0), 2)
+    critical_penalty = round(min(40.0, sum((critical_columns_penalties or {}).values())), 2)
+
+    total_deductions = (
+        missing_penalty
+        + duplicate_penalty
+        + outlier_penalty
+        + invalid_date_penalty
+        + empty_column_penalty
+        + critical_penalty
+    )
     final_score = max(0.0, round(100.0 - total_deductions, 2))
 
     breakdown = {
@@ -84,6 +109,8 @@ def compute_quality_score(
         "duplicate_penalty": duplicate_penalty,
         "outlier_penalty": outlier_penalty,
         "invalid_date_penalty": invalid_date_penalty,
+        "empty_column_penalty": empty_column_penalty,
+        "critical_column_penalty": critical_penalty,
     }
 
     explanations: List[str] = []
@@ -95,6 +122,15 @@ def compute_quality_score(
         explanations.append(f"Outliers deducted {outlier_penalty} pts ({outliers_count} extreme values).")
     if invalid_date_penalty > 0:
         explanations.append(f"Invalid dates deducted {invalid_date_penalty} pts ({invalid_dates_count} invalid entries).")
+    if empty_column_penalty > 0:
+        explanations.append(
+            f"Empty columns deducted {empty_column_penalty} pts ({empty_columns_count} completely empty column(s))."
+        )
+    if critical_columns_penalties:
+        for col_name, pen in critical_columns_penalties.items():
+            explanations.append(
+                f"Critical column '{col_name}' has missing values (deducted {pen} pts)."
+            )
 
     if not explanations:
         explanations.append("Excellent data hygiene: zero missing, duplicate, or outlier entries detected.")
@@ -158,6 +194,7 @@ def scan_dataframe(
     df: pd.DataFrame,
     source_name: str = "in_memory_dataframe",
     config: Optional[IragiConfig] = None,
+    critical_columns: Optional[List[str]] = None,
 ) -> DataInspectionResult:
     """Inspect and profile an in-memory pandas DataFrame.
 
@@ -167,6 +204,8 @@ def scan_dataframe(
     :type source_name: str
     :param config: Optional custom configuration instance.
     :type config: Optional[IragiConfig]
+    :param critical_columns: Optional column names treated as critical (heavy null penalties).
+    :type critical_columns: Optional[List[str]]
     :return: Comprehensive DataInspectionResult.
     :rtype: DataInspectionResult
 
@@ -185,6 +224,19 @@ def scan_dataframe(
 
     column_profiles, duplicate_rows, outliers_count, invalid_dates = profile_dataframe(df, config=cfg)
 
+    empty_columns_count = sum(
+        1 for p in column_profiles if p.total_count > 0 and p.missing_count == p.total_count
+    )
+
+    critical_penalties: Dict[str, float] = {}
+    if critical_columns and row_count > 0:
+        for col in critical_columns:
+            if col in df.columns:
+                m_count = int(df[col].isna().sum())
+                if m_count > 0:
+                    ratio = m_count / row_count
+                    critical_penalties[col] = round(min(30.0, max(10.0, ratio * 30.0)), 2)
+
     quality_score = compute_quality_score(
         row_count=row_count,
         column_count=column_count,
@@ -193,6 +245,8 @@ def scan_dataframe(
         outliers_count=outliers_count,
         invalid_dates_count=invalid_dates,
         config=cfg,
+        empty_columns_count=empty_columns_count,
+        critical_columns_penalties=critical_penalties,
     )
 
     recommendations = generate_recommendations(
@@ -222,11 +276,154 @@ def scan_dataframe(
     )
 
 
+def scan_csv_stream(
+    file_path: Union[str, Path],
+    chunksize: int = 50_000,
+    config: Optional[IragiConfig] = None,
+    delimiter: Optional[str] = None,
+    critical_columns: Optional[List[str]] = None,
+) -> DataInspectionResult:
+    """Inspect and profile a large CSV file using streaming chunked reading.
+
+    Memory consumption is strictly bounded by ``chunksize`` rows, enabling
+    safe inspection of multi-gigabyte files without risk of OutOfMemory (OOM).
+
+    :param file_path: Path to the CSV file.
+    :type file_path: Union[str, Path]
+    :param chunksize: Chunk size in rows (default: 50 000).
+    :type chunksize: int
+    :param config: Optional custom scoring configuration.
+    :type config: Optional[IragiConfig]
+    :param delimiter: Optional explicit CSV delimiter.
+    :type delimiter: Optional[str]
+    :param critical_columns: Optional list of critical column names.
+    :type critical_columns: Optional[List[str]]
+    :return: DataInspectionResult with accumulated quality metrics.
+    :rtype: DataInspectionResult
+
+    Example:
+        >>> res = scan_csv_stream("large_data.csv", chunksize=10_000)
+        >>> res.row_count > 0
+        True
+    """
+    from iragi.scan.readers import iter_csv_chunks
+
+    cfg = config or get_default_config()
+    path = Path(file_path)
+
+    total_rows = 0
+    column_count = 0
+    missing_counts: Dict[str, int] = {}
+    samples_per_col: Dict[str, List[Any]] = {}
+    inferred_types: Dict[str, str] = {}
+    detected_delimiter: Optional[str] = None
+
+    for chunk in iter_csv_chunks(path, chunksize=chunksize, delimiter=delimiter):
+        if total_rows == 0:
+            column_count = int(chunk.shape[1])
+            detected_delimiter = chunk.attrs.get("delimiter")
+            for col in chunk.columns:
+                str_col = str(col)
+                missing_counts[str_col] = 0
+                samples_per_col[str_col] = []
+                inferred_types[str_col] = infer_column_type(chunk[col])
+
+        total_rows += len(chunk)
+        for col in chunk.columns:
+            str_col = str(col)
+            missing_counts[str_col] += int(chunk[col].isna().sum())
+            if len(samples_per_col[str_col]) < 5000:
+                samples_per_col[str_col].extend(chunk[col].dropna().head(500).tolist())
+
+    total_missing = sum(missing_counts.values())
+
+    column_profiles: List[ColumnProfile] = []
+    total_outliers = 0
+    total_invalid_dates = 0
+
+    for col_name, inf_type in inferred_types.items():
+        m_count = missing_counts[col_name]
+        sample_series = pd.Series(samples_per_col[col_name])
+        outliers_count = 0
+        invalid_dates_count = 0
+
+        if inf_type == "numeric" and not sample_series.empty:
+            outliers_count = detect_outliers_iqr(sample_series, multiplier=cfg.outlier_iqr_multiplier)
+            total_outliers += outliers_count
+        elif inf_type == "datetime" and not sample_series.empty:
+            invalid_dates_count = detect_invalid_dates(sample_series)
+            total_invalid_dates += invalid_dates_count
+
+        summary_stats = compute_column_summary(sample_series, inf_type) if not sample_series.empty else {}
+
+        profile = ColumnProfile(
+            name=col_name,
+            inferred_type=inf_type,
+            total_count=total_rows,
+            missing_count=m_count,
+            unique_count=int(sample_series.nunique()) if not sample_series.empty else 0,
+            invalid_dates_count=invalid_dates_count,
+            outliers_count=outliers_count,
+            summary_stats=summary_stats,
+        )
+        column_profiles.append(profile)
+
+    empty_columns_count = sum(
+        1 for p in column_profiles if p.total_count > 0 and p.missing_count == p.total_count
+    )
+
+    critical_penalties: Dict[str, float] = {}
+    if critical_columns and total_rows > 0:
+        for col in critical_columns:
+            if col in missing_counts:
+                m_count = missing_counts[col]
+                if m_count > 0:
+                    ratio = m_count / total_rows
+                    critical_penalties[col] = round(min(30.0, max(10.0, ratio * 30.0)), 2)
+
+    quality_score = compute_quality_score(
+        row_count=total_rows,
+        column_count=column_count,
+        missing_count=total_missing,
+        duplicate_rows=0,
+        outliers_count=total_outliers,
+        invalid_dates_count=total_invalid_dates,
+        config=cfg,
+        empty_columns_count=empty_columns_count,
+        critical_columns_penalties=critical_penalties,
+    )
+
+    recommendations = generate_recommendations(
+        missing_count=total_missing,
+        duplicate_rows=0,
+        outliers_count=total_outliers,
+        invalid_dates_count=total_invalid_dates,
+    )
+
+    return DataInspectionResult(
+        file_path=str(path),
+        row_count=total_rows,
+        column_count=column_count,
+        missing_values_count=total_missing,
+        duplicate_rows_count=0,
+        invalid_dates_count=total_invalid_dates,
+        potential_outliers_count=total_outliers,
+        quality_score=quality_score,
+        column_profiles=column_profiles,
+        recommendations=recommendations,
+        delimiter=detected_delimiter,
+        analyzed_at=datetime.now(),
+    )
+
+
 def scan(
     file_path: Union[str, Path],
     config: Optional[IragiConfig] = None,
     sheet_name: Optional[Union[str, int]] = 0,
     delimiter: Optional[str] = None,
+    stream: bool = False,
+    chunksize: int = 50_000,
+    critical_columns: Optional[List[str]] = None,
 ) -> DataInspectionResult:
     """Inspect, profile, and evaluate the quality of a CSV, Excel, or JSON file.
 
@@ -238,6 +435,12 @@ def scan(
     :type sheet_name: Optional[Union[str, int]]
     :param delimiter: Optional explicit CSV delimiter.
     :type delimiter: Optional[str]
+    :param stream: If True and target is CSV, use bounded streaming reader.
+    :type stream: bool
+    :param chunksize: Chunk size when stream=True (default: 50 000).
+    :type chunksize: int
+    :param critical_columns: Optional critical columns subjected to heavy null penalties.
+    :type critical_columns: Optional[List[str]]
     :return: Comprehensive DataInspectionResult.
     :rtype: DataInspectionResult
 
@@ -251,10 +454,20 @@ def scan(
         2
     """
     path = Path(file_path)
+    if stream and path.suffix.lower() in [".csv", ".tsv", ".txt"]:
+        return scan_csv_stream(
+            path,
+            chunksize=chunksize,
+            config=config,
+            delimiter=delimiter,
+            critical_columns=critical_columns,
+        )
+
     df, _ = load_tabular_file(path, sheet_name=sheet_name, delimiter=delimiter)
-    return scan_dataframe(df, source_name=str(path), config=config)
+    return scan_dataframe(df, source_name=str(path), config=config, critical_columns=critical_columns)
 
 
 # Self-reference for API compatibility: allows both scan(...) and scan.scan(...)
 scan.scan = scan  # type: ignore[attr-defined]
 scan.scan_dataframe = scan_dataframe  # type: ignore[attr-defined]
+scan.scan_csv_stream = scan_csv_stream  # type: ignore[attr-defined]

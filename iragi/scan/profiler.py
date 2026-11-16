@@ -88,6 +88,55 @@ def infer_column_type(series: pd.Series) -> str:
     return "text"
 
 
+def detect_outliers_modified_zscore(series: pd.Series, threshold: float = 3.5) -> int:
+    """Detect outliers using the Modified Z-score (median-based) method.
+
+    More robust than IQR for highly skewed distributions (Pareto, log-normal,
+    Poisson) where IQR generates excessive false positives on legitimate values.
+
+    Modified Z-score: ``M_i = 0.6745 * (x_i - median) / MAD``
+    where MAD = median absolute deviation.
+
+    :param series: Numerical series to evaluate.
+    :type series: pd.Series
+    :param threshold: Flagging threshold (default: 3.5, as per Iglewicz & Hoaglin).
+    :type threshold: float
+    :return: Count of detected outlier points.
+    :rtype: int
+
+    Example:
+        >>> s = pd.Series([1, 2, 2, 3, 2, 1, 1000])
+        >>> detect_outliers_modified_zscore(s)
+        1
+    """
+    if pd.api.types.is_numeric_dtype(series):
+        clean = series.dropna()
+    else:
+        cleaned_str = (
+            series.dropna()
+            .astype(str)
+            .str.replace(" ", "", regex=False)
+            .str.replace("\xa0", "", regex=False)
+            .str.replace(",", ".", regex=False)
+            .str.replace("€", "", regex=False)
+            .str.replace("$", "", regex=False)
+            .str.replace("%", "", regex=False)
+        )
+        clean = pd.to_numeric(cleaned_str, errors="coerce").dropna()
+
+    if len(clean) < 4:
+        return 0
+
+    median = clean.median()
+    mad = (clean - median).abs().median()
+
+    if mad == 0:
+        return 0
+
+    modified_z = 0.6745 * (clean - median).abs() / mad
+    return int((modified_z > threshold).sum())
+
+
 def detect_outliers_iqr(series: pd.Series, multiplier: float = 1.5) -> int:
     """Detect potential numerical outliers using the Interquartile Range (IQR) rule.
 

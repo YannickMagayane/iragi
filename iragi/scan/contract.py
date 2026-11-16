@@ -17,6 +17,8 @@ Example:
 from __future__ import annotations
 
 import re
+import signal
+import threading
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -60,6 +62,8 @@ class _Rule:
     :type min_val: Optional[float]
     :param max_val: Maximum boundary (for 'range' rules).
     :type max_val: Optional[float]
+    :param timeout_seconds: Timeout for regex execution (ReDoS protection).
+    :type timeout_seconds: float
     """
 
     column: str
@@ -67,6 +71,7 @@ class _Rule:
     pattern: Optional[str] = None
     min_val: Optional[float] = None
     max_val: Optional[float] = None
+    timeout_seconds: float = 5.0
 
 
 class DataContract:
@@ -136,20 +141,25 @@ class DataContract:
         self._rules.append(_Rule(column=column, kind="range", min_val=min_val, max_val=max_val))
         return self
 
-    def require_regex(self, column: str, pattern: str) -> "DataContract":
+    def require_regex(self, column: str, pattern: str, timeout_seconds: float = 5.0) -> "DataContract":
         """Declare that all non-null string values must match the given regex pattern.
+
+        A per-call timeout protects against ReDoS (Regular Expression Denial of Service)
+        caused by catastrophic backtracking patterns.
 
         :param column: Column name to enforce.
         :type column: str
         :param pattern: Python-compatible regular expression.
         :type pattern: str
+        :param timeout_seconds: Maximum seconds allowed for regex evaluation (default: 5).
+        :type timeout_seconds: float
         :return: Self, for method chaining.
         :rtype: DataContract
 
         Example:
             >>> contract = DataContract().require_regex("phone", r"^\\+?[0-9]{7,15}$")
         """
-        self._rules.append(_Rule(column=column, kind="regex", pattern=pattern))
+        self._rules.append(_Rule(column=column, kind="regex", pattern=pattern, timeout_seconds=timeout_seconds))
         return self
 
 
@@ -227,7 +237,28 @@ def validate_contract(
         elif rule.kind == "regex":
             compiled = re.compile(rule.pattern)
             non_null = series.dropna().astype(str)
-            mismatches = non_null[~non_null.str.match(compiled)]
+
+            # ReDoS protection: use kernel timer to preempt catastrophic backtracking
+            has_sigalrm = hasattr(signal, "SIGALRM")
+            is_main = threading.current_thread() is threading.main_thread()
+
+            if has_sigalrm and is_main and rule.timeout_seconds > 0:
+                def _handle_timeout(signum, frame):
+                    raise TimeoutError(
+                        f"Regex pattern '{rule.pattern}' on column '{rule.column}' exceeded "
+                        f"{rule.timeout_seconds}s timeout — possible ReDoS attack."
+                    )
+
+                old_handler = signal.signal(signal.SIGALRM, _handle_timeout)
+                signal.setitimer(signal.ITIMER_REAL, rule.timeout_seconds)
+                try:
+                    mismatches = non_null[~non_null.str.match(compiled)]
+                finally:
+                    signal.setitimer(signal.ITIMER_REAL, 0)
+                    signal.signal(signal.SIGALRM, old_handler)
+            else:
+                mismatches = non_null[~non_null.str.match(compiled)]
+
             count = int(len(mismatches))
             if count > 0:
                 violations.append(ContractViolation(

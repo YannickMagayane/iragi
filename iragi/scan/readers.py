@@ -11,13 +11,91 @@ Example:
 """
 
 import json
+import re
+import zipfile
 from pathlib import Path
-from typing import Tuple, Union, Optional
+from typing import Iterator, Tuple, Union, Optional
 import pandas as pd
 from iragi.core.exceptions import IragiDataError
 
+# Characters that trigger formula injection in spreadsheet apps (CSV Injection)
+_FORMULA_INJECTION_CHARS = re.compile(r"^[=+\-@\t\r]+")
 
-def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None) -> pd.DataFrame:
+
+def _check_zip_bomb(
+    path: Path, max_ratio: float = 100.0, max_uncompressed_bytes: int = 500 * 1024 * 1024
+) -> None:
+    """Detect potential Zip Bomb or abnormal decompression ratios in archive-based files.
+
+    Protects against Billion Laughs / Zip Bomb attacks where tiny archives decompress
+    into gigabytes of repetitive data, exhausting server memory.
+
+    :param path: Path to archive file.
+    :type path: Path
+    :param max_ratio: Maximum allowable uncompressed-to-compressed size ratio (default: 100).
+    :type max_ratio: float
+    :param max_uncompressed_bytes: Maximum total uncompressed payload size (default: 500MB).
+    :type max_uncompressed_bytes: int
+    :raises IragiDataError: If compression ratio or total uncompressed size violates limits.
+
+    Example:
+        >>> from pathlib import Path
+        >>> _check_zip_bomb(Path("sample.xlsx"))
+    """
+    if not zipfile.is_zipfile(path):
+        return
+
+    total_uncompressed = 0
+    total_compressed = max(1, path.stat().st_size)
+
+    try:
+        with zipfile.ZipFile(path, "r") as zf:
+            for info in zf.infolist():
+                total_uncompressed += info.file_size
+                if total_uncompressed > max_uncompressed_bytes:
+                    raise IragiDataError(
+                        f"Potential Zip Bomb detected: uncompressed size ({total_uncompressed} bytes) "
+                        f"exceeds safety threshold ({max_uncompressed_bytes} bytes)."
+                    )
+    except zipfile.BadZipFile as exc:
+        raise IragiDataError(f"Corrupted or invalid zip archive: {exc}") from exc
+
+    ratio = total_uncompressed / total_compressed
+    if ratio > max_ratio and total_uncompressed > 5 * 1024 * 1024:
+        raise IragiDataError(
+            f"Potential Zip Bomb detected: compression ratio ({ratio:.1f}x) "
+            f"exceeds safety limit ({max_ratio}x)."
+        )
+
+
+def _sanitize_formulas(df: pd.DataFrame) -> pd.DataFrame:
+    """Strip leading formula-injection characters from all string columns.
+
+    Removes leading ``=``, ``+``, ``-``, ``@``, ``\\t``, ``\\r`` characters
+    from string values to prevent CSV Formula Injection when the output is
+    opened in a spreadsheet application.
+
+    :param df: DataFrame to sanitize (in-place on a copy).
+    :type df: pd.DataFrame
+    :return: Sanitized DataFrame copy.
+    :rtype: pd.DataFrame
+
+    Example:
+        >>> import pandas as pd
+        >>> df = pd.DataFrame({"cmd": ["=FORMULA", "+SUM(1)", "safe"]})
+        >>> out = _sanitize_formulas(df)
+        >>> out["cmd"].tolist()
+        ['FORMULA', 'SUM(1)', 'safe']
+    """
+    df = df.copy()
+    for col in df.select_dtypes(include=["object", "string"]).columns:
+        df[col] = df[col].apply(
+            lambda v: _FORMULA_INJECTION_CHARS.sub("", str(v)) if isinstance(v, str) else v
+        )
+    return df
+
+
+def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None, sanitize_formulas: bool = False) -> pd.DataFrame:
     """Read a CSV file into a pandas DataFrame with automatic delimiter and BOM inference.
 
     Handles UTF-8 with BOM (\\ufeff), standard UTF-8, Latin-1, and infers
@@ -28,6 +106,9 @@ def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None) 
     :type file_path: Union[str, Path]
     :param delimiter: Optional explicit column delimiter.
     :type delimiter: Optional[str]
+    :param sanitize_formulas: If True, strip leading ``= + - @`` from string cells
+        to prevent CSV Formula Injection. Default: False (backward compatible).
+    :type sanitize_formulas: bool
     :return: Loaded pandas DataFrame with attrs['delimiter'] populated.
     :rtype: pd.DataFrame
     :raises IragiDataError: If the CSV file cannot be read or is invalid.
@@ -58,6 +139,8 @@ def read_csv_file(file_path: Union[str, Path], delimiter: Optional[str] = None) 
                 if len(df.columns) > 1 or delimiter is not None or sep == delimiters[-1]:
                     df.attrs["delimiter"] = sep
                     df.attrs["encoding"] = encoding
+                    if sanitize_formulas:
+                        df = _sanitize_formulas(df)
                     return df
             except Exception as exc:
                 last_error = exc
@@ -93,6 +176,8 @@ def read_excel_file(
     if not path.is_file():
         raise IragiDataError(f"File not found: {path}")
 
+    _check_zip_bomb(path)
+
     try:
         excel_file = pd.ExcelFile(path)
         all_sheets = excel_file.sheet_names
@@ -126,6 +211,8 @@ def read_json_file(file_path: Union[str, Path]) -> pd.DataFrame:
     if not path.is_file():
         raise IragiDataError(f"File not found: {path}")
 
+    _check_zip_bomb(path)
+
     try:
         # First attempt standard JSON loading
         with open(path, "r", encoding="utf-8") as f:
@@ -151,15 +238,65 @@ def read_json_file(file_path: Union[str, Path]) -> pd.DataFrame:
         raise IragiDataError(f"Failed to read JSON data from '{path}': {exc}") from exc
 
 
+def iter_csv_chunks(
+    file_path: Union[str, Path],
+    chunksize: int = 50_000,
+    delimiter: Optional[str] = None,
+    sanitize_formulas: bool = False,
+) -> Iterator[pd.DataFrame]:
+    """Yield successive DataFrame chunks from a CSV file.
+
+    Enables bounded-memory streaming without loading the full file in RAM.
+
+    :param file_path: Path to the CSV file.
+    :type file_path: Union[str, Path]
+    :param chunksize: Number of rows per chunk (default: 50 000).
+    :type chunksize: int
+    :param delimiter: Optional explicit delimiter.
+    :type delimiter: Optional[str]
+    :param sanitize_formulas: Strip leading formula injection characters.
+    :type sanitize_formulas: bool
+    :return: Iterator yielding DataFrame slices.
+    :rtype: Iterator[pd.DataFrame]
+    :raises IragiDataError: If reading fails.
+
+    Example:
+        >>> for chunk in iter_csv_chunks("file.csv", chunksize=10_000):
+        ...     assert len(chunk) <= 10_000
+    """
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"File not found: {path}")
+
+    probe = read_csv_file(path, delimiter=delimiter)
+    detected_delimiter = probe.attrs.get("delimiter", ",")
+    detected_encoding = probe.attrs.get("encoding", "utf-8-sig")
+
+    try:
+        reader = pd.read_csv(
+            path,
+            sep=detected_delimiter,
+            encoding=detected_encoding,
+            chunksize=chunksize,
+            engine="python",
+        )
+        for chunk in reader:
+            if sanitize_formulas:
+                chunk = _sanitize_formulas(chunk)
+            chunk.attrs["delimiter"] = detected_delimiter
+            chunk.attrs["encoding"] = detected_encoding
+            yield chunk
+    except Exception as exc:
+        raise IragiDataError(f"Failed streaming CSV chunks from '{path}': {exc}") from exc
+
+
 def read_csv_chunked(
     file_path: Union[str, Path],
     chunksize: int = 50_000,
     delimiter: Optional[str] = None,
+    sanitize_formulas: bool = False,
 ) -> pd.DataFrame:
     """Read a large CSV file in chunks and assemble into a single DataFrame.
-
-    Avoids loading the entire file into memory at once. Automatically infers
-    delimiter and BOM encoding. Exposes detected delimiter via DataFrame.attrs.
 
     :param file_path: Path to the CSV file.
     :type file_path: Union[str, Path]
@@ -167,6 +304,8 @@ def read_csv_chunked(
     :type chunksize: int
     :param delimiter: Optional explicit delimiter; inferred when omitted.
     :type delimiter: Optional[str]
+    :param sanitize_formulas: Strip leading formula injection characters.
+    :type sanitize_formulas: bool
     :return: Assembled DataFrame with attrs['delimiter'] populated.
     :rtype: pd.DataFrame
     :raises IragiDataError: If the file cannot be read.
@@ -180,29 +319,20 @@ def read_csv_chunked(
         >>> len(df)
         2
     """
-    path = Path(file_path)
-    if not path.is_file():
-        raise IragiDataError(f"File not found: {path}")
-
-    # Probe delimiter using first chunk read (small sample)
-    probe = read_csv_file(path, delimiter=delimiter)
-    detected_delimiter = probe.attrs.get("delimiter", ",")
-    detected_encoding = probe.attrs.get("encoding", "utf-8-sig")
-
-    try:
-        chunks = pd.read_csv(
-            path,
-            sep=detected_delimiter,
-            encoding=detected_encoding,
+    chunks = list(
+        iter_csv_chunks(
+            file_path,
             chunksize=chunksize,
-            engine="python",
+            delimiter=delimiter,
+            sanitize_formulas=sanitize_formulas,
         )
-        df = pd.concat(list(chunks), ignore_index=True)
-        df.attrs["delimiter"] = detected_delimiter
-        df.attrs["encoding"] = detected_encoding
-        return df
-    except Exception as exc:
-        raise IragiDataError(f"Failed to read CSV in chunks from '{path}': {exc}") from exc
+    )
+    if not chunks:
+        return pd.DataFrame()
+    df = pd.concat(chunks, ignore_index=True)
+    df.attrs["delimiter"] = chunks[0].attrs.get("delimiter")
+    df.attrs["encoding"] = chunks[0].attrs.get("encoding")
+    return df
 
 
 def load_tabular_file(

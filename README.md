@@ -65,11 +65,13 @@ Inspects CSV, Excel, and JSON datasets without destructive mutations:
 - **Format detection:** Auto-detection of delimiters, encodings, and spreadsheet sheets.
 - **Column profiling:** Automated type inference (numeric, categorical, datetime, text), uniqueness, and cardinality metrics.
 - **Completeness & Hygiene checks:** Missing value rates, null indicators, whitespace issues, and duplicate row detection.
-- **Statistical anomaly detection:** Configurable Interquartile Range (IQR) outlier detection and date format validation — including currency-formatted numeric columns.
-- **Explainable Quality Score (0–100):** Transparent penalty breakdown across missing data, duplicates, and outliers.
-- **Actionable recommendations:** Targeted cleanup hints generated alongside every scan.
-- **Data Contracts:** Declare and enforce custom business rules per column (`not_null`, `positive`, `range`, `regex`).
-- **Chunked reading:** `read_csv_chunked()` processes large CSV files in configurable memory slices without loading them entirely into RAM.
+- **Statistical anomaly detection:** Configurable Interquartile Range (IQR) and **Modified Z-Score** (median-based MAD) outlier detection — avoiding false positives on skewed or Pareto-distributed data.
+- **Explainable Quality Score (0–100):** Transparent penalty breakdown across missing data, duplicates, outliers, empty columns, and critical columns (anti-dilution).
+- **Data Contracts:** Declare and enforce custom business rules per column (`not_null`, `positive`, `range`, `regex` with **ReDoS timeout protection**).
+- **Auto-Remediation (`auto_clean`):** Automatically cleans DataFrames (deduplication, smart numeric mean/median imputation, categorical mode imputation) without modifying original files.
+- **Drift Detection (`compare_scans`):** Compares snapshots across time to highlight score degradation, schema changes, and drifting columns.
+- **True Streaming (`scan_csv_stream` / `iter_csv_chunks`):** One-pass streaming inspection for multi-gigabyte CSVs with strictly bounded memory (O(chunksize)).
+- **Enterprise Security:** CSV Formula Injection sanitization (`sanitize_formulas=True`) and decompression Zip Bomb defense on Excel workbooks.
 
 ### 2. `iragi.pdf` — Document Extraction
 
@@ -79,7 +81,15 @@ High-throughput text and table extraction from digital or scanned PDF files:
 - **Table reconstruction:** Integration with `pdfplumber` to transform document tables into Pandas DataFrames.
 - **Scanned page detection:** Predictive heuristic rules detecting when OCR (Tesseract / Pillow) is required.
 
-### 3. `iragi.all` — Unified Orchestration
+### 3. `iragi.reconcile` — Cross-Source Data Reconciliation
+
+Join-based reconciliation engine across heterogeneous data sources:
+- **Cross-file matching:** Reconciles records between CSV, Excel, or extracted PDF tables on arbitrary keys.
+- **Orphan identification:** Isolates records present in source A but missing from source B, and vice-versa.
+- **Value conflict detection:** Identifies field-by-field discrepancies between matched records.
+- **Match Rate:** Computes definitive reconciliation coverage percentage.
+
+### 4. `iragi.all` — Unified Orchestration
 
 A single interface to rule them all:
 - **Universal entrypoint:** `iragi.analyze(file_path)` determines file type and runs the optimal pipeline.
@@ -210,6 +220,89 @@ print(f"Detected delimiter: {df.attrs.get('delimiter')}")
 
 ---
 
+## Cross-Source Data Reconciliation (`iragi.reconcile`)
+
+Reconcile records across disparate sources (e.g. CSV vs Excel or extracted PDF tables):
+
+```python
+import iragi
+import pandas as pd
+
+df_csv = pd.read_csv("orders_crm.csv")
+df_excel = pd.read_excel("invoices_erp.xlsx")
+
+# Match on 'order_id' and cross-check 'total_amount'
+result = iragi.reconcile(df_csv, df_excel, on="order_id", compare_columns=["total_amount"])
+
+print(f"Match Rate: {result.match_rate * 100:.2f}%")
+print(f"Matched records: {result.matched_count}")
+print(f"Orphans in CRM only: {result.orphan_a_count}")
+print(f"Orphans in ERP only: {result.orphan_b_count}")
+print(f"Value conflicts on 'total_amount': {result.conflict_columns.get('total_amount', 0)}")
+```
+
+---
+
+## Auto-Remediation & Data Cleaning (`iragi.auto_clean`)
+
+Remediate quality defects without mutating original files:
+
+```python
+import iragi
+import pandas as pd
+
+raw_df = pd.read_csv("messy_data.csv")
+
+clean_res = iragi.auto_clean(
+    raw_df,
+    drop_duplicates=True,
+    impute_numeric="mean",       # or "median"
+    impute_categorical="mode",
+)
+
+cleaned_df = clean_res.df
+print(f"Duplicates removed: {clean_res.changes['duplicates_removed']}")
+print(f"Null cells imputed: {clean_res.changes['nulls_imputed']}")
+```
+
+---
+
+## Data Drift Detection (`iragi.compare_scans`)
+
+Monitor data distributions across time or pipeline runs:
+
+```python
+import iragi
+
+scan_yesterday = iragi.scan("data_2026_01_01.csv")
+scan_today = iragi.scan("data_2026_01_02.csv")
+
+drift = iragi.compare_scans(scan_yesterday, scan_today)
+
+print(f"Quality delta: {drift.score_delta:+.2f} pts")
+print(f"Missing count delta: {drift.missing_delta:+d}")
+print(f"Drifted columns: {drift.drifted_columns}")
+print(f"Summary: {drift.summary}")
+```
+
+---
+
+## True Streaming Scan for Big Data (`iragi.scan_csv_stream`)
+
+Inspect files of any size (even 50 GB+) with strictly bounded RAM:
+
+```python
+import iragi
+
+# Bounded memory: processes in 50,000 row chunks, never loading the whole dataset
+result = iragi.scan_csv_stream("massive_dataset.csv", chunksize=50_000)
+
+print(f"Rows: {result.row_count}, Columns: {result.column_count}")
+print(f"Score: {result.quality_score.total_score:.1f}/100")
+```
+
+---
+
 ## Command Line Interface (CLI)
 
 Iragi includes a rich CLI built with Typer and Rich:
@@ -260,6 +353,7 @@ Iragi is built on a battle-tested Python stack:
 - [x] **Phase 4 — All Orchestration:** Unified pipeline, PDF-to-Scan bridge, batch processing.
 - [x] **Phase 5 — Production & PyPI:** 100% test coverage, Sphinx docs, PyPI automated deployment.
 - [x] **Phase 6 — Structural Hardening (v0.3.0):** Data Contracts engine, multi-sheet Excel batch, chunked CSV reading.
+- [x] **Phase 7 — Enterprise Governance & Security (v0.4.0):** Cross-source reconciliation (`iragi.reconcile`), auto-remediation (`auto_clean`), drift detection (`compare_scans`), true bounded-memory streaming (`scan_csv_stream`), ReDoS protection, CSV Formula Injection defense, Zip Bomb shielding, Modified Z-score outlier detection, and anti-dilution critical columns scoring.
 
 ---
 
