@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# bin/bump — Bump the semantic version of the iragi package.
+#
+# Usage:
+#   ./bin/bump patch     # 0.1.0 → 0.1.1  (bug fixes)
+#   ./bin/bump minor     # 0.1.0 → 0.2.0  (new features, backwards-compatible)
+#   ./bin/bump major     # 0.1.0 → 1.0.0  (breaking changes)
+#
+# What it does:
+#   1. Validates the part argument (patch | minor | major).
+#   2. Reads the current version from pyproject.toml.
+#   3. Calls bump-my-version to update pyproject.toml, iragi/__init__.py and README.md.
+#   4. Rebuilds the distribution archives (dist/).
+#   5. Prints the git commands to commit, tag and push.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/_common.sh"
+
+# ---------------------------------------------------------------------------
+# 1. Validate argument
+# ---------------------------------------------------------------------------
+PART="${1:-}"
+if [[ -z "$PART" ]]; then
+    echo "Usage: ./bin/bump <patch|minor|major>"
+    echo ""
+    echo "  patch  — bug fix         (0.1.0 → 0.1.1)"
+    echo "  minor  — new feature     (0.1.0 → 0.2.0)"
+    echo "  major  — breaking change (0.1.0 → 1.0.0)"
+    exit 1
+fi
+
+if [[ "$PART" != "patch" && "$PART" != "minor" && "$PART" != "major" ]]; then
+    echo "Error: unknown part '$PART'. Choose patch, minor or major."
+    exit 1
+fi
+
+cd "$ROOT_DIR"
+
+# ---------------------------------------------------------------------------
+# 2. Read current version
+# ---------------------------------------------------------------------------
+CURRENT_VERSION=$(grep '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+echo "Current version : $CURRENT_VERSION"
+
+# ---------------------------------------------------------------------------
+# 3. Bump version across all configured files
+# ---------------------------------------------------------------------------
+echo "Bumping $PART..."
+"$VENV_DIR/bin/bump-my-version" bump "$PART" --verbose
+
+# Read new version after the bump
+NEW_VERSION=$(grep '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+echo ""
+echo "New version     : $NEW_VERSION"
+
+# ---------------------------------------------------------------------------
+# 4. Rebuild distribution archives
+# ---------------------------------------------------------------------------
+echo ""
+echo "Rebuilding distribution archives..."
+"$SCRIPT_DIR/build"
+
+# ---------------------------------------------------------------------------
+# 5. Print git commands for the user to run
+# ---------------------------------------------------------------------------
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  Version bumped: $CURRENT_VERSION → $NEW_VERSION"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Run these git commands to commit, tag and trigger PyPI publication:"
+echo ""
+echo "  git add pyproject.toml iragi/__init__.py README.md"
+echo "  git commit -m \"chore(release): bump version $CURRENT_VERSION → $NEW_VERSION\""
+echo "  git push origin main"
+echo ""
+echo "Then create the GitHub release to trigger auto-publish to PyPI:"
+echo ""
+echo "  gh release create v$NEW_VERSION \\"
+echo "    --title \"v$NEW_VERSION\" \\"
+echo "    --generate-notes"
+echo ""

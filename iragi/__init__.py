@@ -9,6 +9,7 @@ Example:
 """
 
 from iragi.scan import scan, scan_dataframe
+from iragi.all import analyze, batch_analyze
 
 __version__ = "0.1.0"
-__all__ = ["__version__", "scan", "scan_dataframe"]
+__all__ = ["__version__", "scan", "scan_dataframe", "analyze", "batch_analyze"]

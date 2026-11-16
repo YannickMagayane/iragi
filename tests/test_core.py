@@ -7,6 +7,8 @@ Example:
     $ pytest tests/test_core.py
 """
 
+import re
+import tomllib
 from pathlib import Path
 import pytest
 import iragi
@@ -14,16 +16,55 @@ from iragi.core.config import IragiConfig, get_default_config
 from iragi.core.exceptions import IragiError, IragiDataError
 from iragi.core.models import QualityScore, ColumnProfile, DataInspectionResult
 
+# Root of the repository (parent of tests/)
+ROOT = Path(__file__).parent.parent
+
+
+def _read_pyproject_version() -> str:
+    """Read the canonical version from pyproject.toml.
+
+    :return: Version string, e.g. ``"0.2.0"``.
+    :rtype: str
+
+    Example:
+        >>> v = _read_pyproject_version()
+        >>> assert re.match(r"\\d+\\.\\d+\\.\\d+", v)
+    """
+    with open(ROOT / "pyproject.toml", "rb") as fh:
+        data = tomllib.load(fh)
+    return data["project"]["version"]
+
 
 def test_iragi_version() -> None:
-    """Validate that the package version string is defined and non-empty.
+    """Validate that the package __version__ matches pyproject.toml.
+
+    This test automatically tracks version bumps: whenever ``./bin/bump``
+    updates ``pyproject.toml`` and ``iragi/__init__.py``, this test
+    remains green without any manual edit.
 
     Example:
         >>> import iragi
-        >>> assert iragi.__version__ == "0.1.0"
+        >>> assert iragi.__version__ == _read_pyproject_version()
     """
+    expected = _read_pyproject_version()
     assert hasattr(iragi, "__version__")
-    assert iragi.__version__ == "0.1.0"
+    assert iragi.__version__ == expected, (
+        f"iragi.__version__ ({iragi.__version__!r}) does not match "
+        f"pyproject.toml ({expected!r}). Run ./bin/bump to sync them."
+    )
+
+
+def test_version_format() -> None:
+    """Validate that the package version follows semantic versioning (MAJOR.MINOR.PATCH).
+
+    Example:
+        >>> import iragi
+        >>> import re
+        >>> assert re.match(r"\\d+\\.\\d+\\.\\d+", iragi.__version__)
+    """
+    assert re.match(r"^\d+\.\d+\.\d+$", iragi.__version__), (
+        f"Version {iragi.__version__!r} does not follow semantic versioning."
+    )
 
 
 def test_default_config() -> None:
