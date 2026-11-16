@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iragi"
+version = "0.1.0"
+description = "Toolkit Python modulaire pour l'inspection de qualite de donnees et l'extraction documentaire."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Yannick Magayane", email = "yannickmagayaneyan@gmail.com" }
+]
+keywords = ["data-quality", "pdf-extraction", "profiling", "analytics", "data-cleaning"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "jinja2>=3.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/YannickMagayane/iragi"
+Documentation = "https://yannickmagayane.github.io/iragi/"
+Repository = "https://github.com/YannickMagayane/iragi"
+Issues = "https://github.com/YannickMagayane/iragi/issues"
+
+[project.optional-dependencies]
+pdf = [
+    "pypdf>=4.0.0",
+    "pdfplumber>=0.10.0",
+]
+ocr = [
+    "pytesseract>=0.3.10",
+    "pillow>=10.0.0",
+]
+all = [
+    "pypdf>=4.0.0",
+    "pdfplumber>=0.10.0",
+    "pytesseract>=0.3.10",
+    "pillow>=10.0.0",
+]
+docs = [
+    "sphinx>=8.0.0",
+    "sphinx-rtd-theme>=3.0.0",
+    "myst-parser>=4.0.0",
+]
+test = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+iragi = "iragi.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["iragi*"]
+exclude = ["tests*", "docs*", "examples*", "bin*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-v --strict-markers"
