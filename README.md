@@ -11,10 +11,12 @@
 
 <p align="center">
   <a href="https://github.com/YannickMagayane/iragi"><img src="https://img.shields.io/badge/GitHub-YannickMagayane%2Firagi-181717?style=flat&logo=github&logoColor=white" alt="GitHub Repository"></a>
-  <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/v/iragi?color=green&label=PyPI" alt="PyPI Package"></a>
-  <a href="#objectives"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
-  <a href="https://github.com/YannickMagayane/iragi/actions/workflows/ci.yml"><img src="https://github.com/YannickMagayane/iragi/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="#license"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
+  <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/v/iragi" alt="PyPI"></a>
+  <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/pyversions/iragi" alt="Python"></a>
+  <a href="https://github.com/YannickMagayane/iragi/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/iragi" alt="License"></a>
+  <a href="https://pepy.tech/project/iragi"><img src="https://static.pepy.tech/badge/iragi/month" alt="Downloads"></a>
+  <a href="https://github.com/YannickMagayane/iragi/actions"><img src="https://img.shields.io/github/actions/workflow/status/YannickMagayane/iragi/ci.yml" alt="CI"></a>
+  <a href="https://codecov.io/gh/YannickMagayane/iragi"><img src="https://codecov.io/gh/YannickMagayane/iragi/branch/main/graph/badge.svg" alt="codecov"></a>
   <a href="https://github.com/YannickMagayane/iragi/tree/main/docs/source"><img src="https://img.shields.io/badge/Docs-Sphinx-orange.svg" alt="Sphinx Docs"></a>
 </p>
 
@@ -47,10 +49,12 @@ Engineered for seamless integration into standalone Python scripts, Django appli
 - [Deterministic Auto-Remediation & Dead-Letter Quarantine](#deterministic-auto-remediation--dead-letter-quarantine-iragiauto_clean)
 - [Cross-Source Reconciliation & Regex Normalization](#cross-source-reconciliation--regex-normalization-iragireconcile)
 - [Multi-Source Consensus Reconciliation](#multi-source-consensus-reconciliation-iragireconcile_multi)
-- [Bounded-Memory Streaming for Large Files (CSV, Excel, PDF)](#bounded-memory-streaming-for-large-files-csv-excel-pdf)
+- [Chunked Processing for Large Files (CSV, Excel, PDF)](#chunked-processing-for-large-files-csv-excel-pdf)
 - [Data Drift Detection](#data-drift-detection-iragicompare_scans)
 - [Command Line Interface (CLI)](#command-line-interface-cli)
 - [Technology Foundation & Potential](#technology-foundation--potential)
+- [Benchmarks](#benchmarks)
+- [Changelog](#changelog)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -64,7 +68,7 @@ Iragi simplifies critical operations across modern software and data platforms:
 2. **Extract content from complex PDF documents**, including raw text, structural metadata, and embedded tabular grids.
 3. **Cross-source reconciliation** between disparate datasets with regex-based key normalization and consensus tracking.
 4. **Deterministic remediation and dead-letter quarantine (DLQ)** without altering source files or blindly imputing financial equations.
-5. **Chain extraction, quality profiling, and streaming** into an automated pipeline with strictly bounded memory (O(1)).
+5. **Chain extraction, quality profiling, and chunked processing** into an automated pipeline with configurable working-set limits.
 
 ---
 
@@ -81,8 +85,8 @@ Inspects CSV, Excel (.xlsx, .xls), JSON, and Apache Parquet (.parquet, .pq) data
 - **Data Contracts:** Declare and enforce custom business rules per column (`not_null`, `positive`, `range`, `regex` with cross-platform **ReDoS timeout protection**).
 - **Deterministic Auto-Remediation (`auto_clean`):** Applies deduplication, fuzzy string deduplication (`fuzzy_dedup=True`), formula-based deterministic calculations (`computed_columns`), per-column imputation strategies (`impute_strategies`), and sensitive column exclusion (`exclude_columns`).
 - **Dead-Letter Queue Quarantine (DLQ):** When coupled with a `DataContract`, `auto_clean` isolates violating records into a dedicated `quarantine_df` while returning cleaned data in `df`.
-- **True Streaming (`scan_csv_stream`, `scan_excel_stream`, `iter_excel_chunks`):** One-pass streaming inspection for multi-gigabyte CSV and Excel files with strictly bounded memory (O(chunksize)).
-- **Enterprise Security:** CSV Formula Injection sanitization (`sanitize_formulas=True`), XML entity expansion defense (Billion Laughs), and decompression Zip Bomb defense on Excel workbooks.
+- **Chunked processing (`scan_csv_stream`, `scan_excel_stream`, `scan_jsonl_stream`):** Process CSV, Excel and JSON Lines inputs in chunks. Duplicate detection retains row hashes proportional to distinct rows, and streaming scores are estimates based on sampled statistics.
+- **Input safeguards:** Optional CSV formula sanitization, hardened XML parsing, and archive size and compression-ratio limits for spreadsheet files.
 
 ### 2. `iragi.pdf` — Document Extraction & Streaming
 
@@ -128,9 +132,13 @@ pip install "iragi[ocr]"
 pip install "iragi[all]"
 ```
 
+The `pdf` extra installs [PyMuPDF](https://github.com/pymupdf/PyMuPDF), offered under AGPL-3.0 or a separate commercial license. Review its [licensing terms](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright) before distribution.
+
 ---
 
 ## Quickstart (Python API)
+
+For a ready-to-run notebook, open [examples/quickstart.ipynb](https://github.com/YannickMagayane/iragi/blob/main/examples/quickstart.ipynb).
 
 ### Tabular Inspection with Scan
 
@@ -326,9 +334,9 @@ print(f"Orphans by source: {res.orphans_by_source}")
 
 ---
 
-## Bounded-Memory Streaming for Large Files (CSV, Excel, PDF)
+## Chunked Processing for Large Files (CSV, Excel, PDF)
 
-Never crash from Out-Of-Memory (OOM) errors. Iragi profiles and streams large files in O(1) bounded memory:
+CSV, Excel and JSON Lines readers can process input in chunks. Streaming scans retain duplicate row hashes proportional to distinct rows, and calculate statistical scores from samples; their scores are marked as estimates. PDF page and table iterators yield results as they are read.
 
 ```python
 import iragi
@@ -407,7 +415,7 @@ iragi all https://www.insee.fr/en/statistiques/fichier/emploi_2026.xlsx
 
 ## Remote and Cloud File Ingestion
 
-Iragi accepts any HTTP, HTTPS, or FTP URL wherever a local file path is expected.
+Iragi accepts HTTP or HTTPS URLs wherever a local file path is expected. Remote requests reject private and non-routable IP addresses, follow at most five validated redirects, and can be restricted with `allowed_hosts`.
 No configuration is needed. Files are fetched transparently, inspected in memory, and the
 temporary copy is deleted automatically.
 
@@ -460,17 +468,27 @@ for r in results:
 
 ## Technology Foundation & Potential
 
-Iragi is built on a battle-tested Python stack:
+Iragi uses a Python stack that includes:
 - **High-Performance Core:** Python 3.10+, Pandas 2+, and NumPy.
 - **Universal Extraction:** PyMuPDF, pdfplumber, Tesseract / Pillow.
 - **Developer Experience:** Typer, Rich terminal diagnostics.
 - **Reporting Engine:** Jinja2 templating for JSON and HTML reporting.
-- **Quality Checks:** Automated tests run in GitHub Actions across Python 3.10–3.12, with Sphinx API documentation.
+- **Quality Checks:** GitHub Actions tests Python 3.10–3.13 on Linux and Windows with pandas 2.x/3.x; coverage is uploaded to Codecov.
 
 ### Ready for Strategic Integration
 - **ETL & Data Warehousing:** Automated schema validation and hygiene checks before loading into Lakehouses.
 - **Web Applications (Django / FastAPI):** Live validation of user-uploaded spreadsheets and PDF invoices.
 - **AI & LLM RAG Pipelines:** High-fidelity data preparation, structuring documents before vector indexing.
+
+---
+
+## Benchmarks
+
+Re-run the CSV and PDF timing suite with `python bench_suite.py --rows 100000 --output benchmarks/results.json`. The checked-in [results](https://github.com/YannickMagayane/iragi/blob/main/benchmarks/results.json) are a local Python 3.14.4/Linux sample. Reported memory is Python-traced allocation and excludes pandas/NumPy native allocations; timings are hardware-dependent.
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/YannickMagayane/iragi/blob/main/CHANGELOG.md) for release notes.
 
 ---
 
@@ -494,4 +512,4 @@ All PRs targeting `main` require review and approval by `@YannickMagayane`.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](https://github.com/YannickMagayane/iragi/blob/main/LICENSE).

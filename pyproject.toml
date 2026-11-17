@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iragi"
-version = "0.6.2"
+version = "0.6.3"
 description = "Toolkit Python modulaire pour l'inspection de qualite de donnees et l'extraction documentaire."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
@@ -25,6 +25,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
+    "defusedxml>=0.7.1",
     "pandas>=2.0.0",
     "openpyxl>=3.1.0",
     "typer>=0.9.0",
@@ -74,6 +75,7 @@ test = [
 ]
 dev = [
     "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
     "bump-my-version>=1.8.0",
     "build>=1.0.0",
     "twine>=5.0.0",
@@ -97,7 +99,7 @@ addopts = "-v --strict-markers"
 # Usage : ./bin/bump patch | minor | major
 # ---------------------------------------------------------------------------
 [tool.bumpversion]
-current_version = "0.6.2"
+current_version = "0.6.3"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
@@ -116,8 +118,3 @@ replace = "version = \"{new_version}\""
 filename = "iragi/__init__.py"
 search = "__version__ = \"{current_version}\""
 replace = "__version__ = \"{new_version}\""
-
-[[tool.bumpversion.files]]
-filename = "README.md"
-search = "version-[{current_version}]"
-replace = "version-[{new_version}]"

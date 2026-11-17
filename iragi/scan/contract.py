@@ -268,7 +268,7 @@ def validate_contract(
 
         elif rule.kind == "positive":
             numeric = pd.to_numeric(series, errors="coerce")
-            count = int((numeric <= 0).sum())
+            count = int(((numeric <= 0) | (series.notna() & numeric.isna())).sum())
             if count > 0:
                 violations.append(ContractViolation(
                     column=rule.column,
@@ -279,8 +279,9 @@ def validate_contract(
 
         elif rule.kind == "range":
             numeric = pd.to_numeric(series, errors="coerce")
-            out_of_range = numeric[(numeric < rule.min_val) | (numeric > rule.max_val)]
-            count = int(out_of_range.count())
+            invalid = series.notna() & numeric.isna()
+            out_of_range = (numeric < rule.min_val) | (numeric > rule.max_val)
+            count = int((invalid | out_of_range).sum())
             if count > 0:
                 violations.append(ContractViolation(
                     column=rule.column,

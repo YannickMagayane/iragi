@@ -85,6 +85,7 @@ class UnifiedAnalysisResult:
 def analyze(
     file_path: Union[str, Path],
     enable_ocr: bool = False,
+    allowed_hosts=None,
 ) -> UnifiedAnalysisResult:
     """Execute end-to-end extraction and quality audit on a file.
 
@@ -96,6 +97,8 @@ def analyze(
     :type file_path: Union[str, Path]
     :param enable_ocr: Whether to run OCR if scanned PDF pages are detected.
     :type enable_ocr: bool
+    :param allowed_hosts: Optional host allowlist for remote URLs.
+    :type allowed_hosts: Optional[List[str]]
     :return: UnifiedAnalysisResult.
     :rtype: UnifiedAnalysisResult
     :raises IragiDataError: If file is unsupported or unreadable.
@@ -109,7 +112,7 @@ def analyze(
         >>> res.file_type
         'csv'
     """
-    path, is_temp = resolve_file_source(file_path)
+    path, is_temp = resolve_file_source(file_path, allowed_hosts=allowed_hosts)
     try:
         if not path.is_file():
             raise IragiDataError(f"Target file not found: {path}")
@@ -231,6 +234,7 @@ def batch_analyze(
     enable_ocr: bool = False,
     raise_on_error: bool = False,
     excel_all_sheets: bool = False,
+    allowed_hosts=None,
 ) -> List[UnifiedAnalysisResult]:
     """Execute analysis across a batch list of files or directory path.
 
@@ -250,6 +254,8 @@ def batch_analyze(
     :type raise_on_error: bool
     :param excel_all_sheets: If True, analyze every sheet of Excel workbooks independently.
     :type excel_all_sheets: bool
+    :param allowed_hosts: Optional host allowlist for remote URLs.
+    :type allowed_hosts: Optional[List[str]]
     :return: List of UnifiedAnalysisResult objects (including explicit error entries).
     :rtype: List[UnifiedAnalysisResult]
 
@@ -291,7 +297,7 @@ def batch_analyze(
             if not is_remote_url(file_item) and Path(file_item).suffix.lower() in {".xlsx", ".xls", ".xlsm"} and excel_all_sheets:
                 results.extend(_analyze_excel_all_sheets(Path(file_item), enable_ocr=enable_ocr))
             else:
-                res = analyze(file_item, enable_ocr=enable_ocr)
+                res = analyze(file_item, enable_ocr=enable_ocr, allowed_hosts=allowed_hosts)
                 results.append(res)
         except Exception as exc:
             if raise_on_error:

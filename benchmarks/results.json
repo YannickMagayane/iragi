@@ -1,0 +1,46 @@
+{
+  "rows_requested": 100000,
+  "chunksize": 10000,
+  "environment": {
+    "python": "3.14.4",
+    "pandas": "3.1.1",
+    "iragi": "0.6.3",
+    "platform": "Linux-7.0.0-43-generic-x86_64-inconnu-with-glibc2.43",
+    "cpu_count": 16
+  },
+  "measurement_note": "python_traced_peak_bytes excludes native pandas/NumPy allocations; timings are local, not a performance guarantee.",
+  "results": {
+    "pandas": {
+      "seconds": 0.051046,
+      "python_traced_peak_bytes": 2093187,
+      "rows": 100000,
+      "columns": 3
+    },
+    "classic": {
+      "seconds": 0.153365,
+      "python_traced_peak_bytes": 7240013,
+      "rows": 100000,
+      "score": 77.5
+    },
+    "stream": {
+      "seconds": 0.320339,
+      "python_traced_peak_bytes": 3182284,
+      "rows": 100000,
+      "score": 77.5,
+      "duplicate_rows": 90000,
+      "score_is_estimated": true
+    },
+    "pdf_pymupdf": {
+      "seconds": 2.249162,
+      "python_traced_peak_bytes": 16115021,
+      "pages": 100,
+      "characters": 10699
+    },
+    "pdf_iragi": {
+      "seconds": 2.228871,
+      "python_traced_peak_bytes": 16115723,
+      "pages": 100,
+      "characters": 10797
+    }
+  }
+}

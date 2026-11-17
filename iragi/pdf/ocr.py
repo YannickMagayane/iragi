@@ -9,8 +9,10 @@ Example:
     True
 """
 
-from typing import Optional
-from PIL import Image
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 
 def is_page_likely_scanned(extracted_text: str, image_count: int = 0) -> bool:
@@ -37,7 +39,7 @@ def is_page_likely_scanned(extracted_text: str, image_count: int = 0) -> bool:
     return False
 
 
-def run_ocr_on_image(image: Image.Image, lang: str = "eng") -> str:
+def run_ocr_on_image(image: "Image.Image", lang: str = "eng") -> str:
     """Execute Tesseract OCR on a PIL Image if pytesseract is installed.
 
     :param image: Input PIL Image.

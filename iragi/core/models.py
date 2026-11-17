@@ -105,6 +105,8 @@ class DataInspectionResult:
     :type sheet_names: Optional[List[str]]
     :param analyzed_at: Timestamp of inspection completion.
     :type analyzed_at: datetime
+    :param score_is_estimated: True when the score uses chunk-sampled statistics.
+    :type score_is_estimated: bool
 
     Example:
         >>> score = QualityScore(total_score=95.0)
@@ -127,6 +129,7 @@ class DataInspectionResult:
     encoding: Optional[str] = None
     sheet_names: Optional[List[str]] = None
     analyzed_at: datetime = field(default_factory=datetime.now)
+    score_is_estimated: bool = False
 
     @property
     def columns(self) -> List[str]:

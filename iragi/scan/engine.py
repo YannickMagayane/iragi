@@ -315,8 +315,8 @@ def scan_csv_stream(
 ) -> DataInspectionResult:
     """Inspect and profile a large CSV file using streaming chunked reading.
 
-    Memory consumption is strictly bounded by ``chunksize`` rows, enabling
-    safe inspection of multi-gigabyte files without risk of OutOfMemory (OOM).
+    Input rows are read in ``chunksize`` batches. Duplicate detection retains
+    row hashes proportional to distinct rows, and statistical scores use samples.
 
     :param file_path: Path to the CSV file.
     :type file_path: Union[str, Path]
@@ -342,6 +342,8 @@ def scan_csv_stream(
     path = Path(file_path)
 
     total_rows = 0
+    duplicate_rows = 0
+    seen_row_hashes = set()
     column_count = 0
     missing_counts: Dict[str, int] = {}
     samples_per_col: Dict[str, List[Any]] = {}
@@ -359,6 +361,13 @@ def scan_csv_stream(
                 inferred_types[str_col] = infer_column_type(chunk[col])
 
         total_rows += len(chunk)
+        row_hashes = pd.util.hash_pandas_object(chunk, index=False)
+        for row_hash in row_hashes:
+            value = int(row_hash)
+            if value in seen_row_hashes:
+                duplicate_rows += 1
+            else:
+                seen_row_hashes.add(value)
         for col in chunk.columns:
             str_col = str(col)
             missing_counts[str_col] += int(chunk[col].isna().sum())
@@ -415,7 +424,7 @@ def scan_csv_stream(
         row_count=total_rows,
         column_count=column_count,
         missing_count=total_missing,
-        duplicate_rows=0,
+        duplicate_rows=duplicate_rows,
         outliers_count=total_outliers,
         invalid_dates_count=total_invalid_dates,
         config=cfg,
@@ -425,7 +434,7 @@ def scan_csv_stream(
 
     recommendations = generate_recommendations(
         missing_count=total_missing,
-        duplicate_rows=0,
+        duplicate_rows=duplicate_rows,
         outliers_count=total_outliers,
         invalid_dates_count=total_invalid_dates,
     )
@@ -435,7 +444,7 @@ def scan_csv_stream(
         row_count=total_rows,
         column_count=column_count,
         missing_values_count=total_missing,
-        duplicate_rows_count=0,
+        duplicate_rows_count=duplicate_rows,
         invalid_dates_count=total_invalid_dates,
         potential_outliers_count=total_outliers,
         quality_score=quality_score,
@@ -443,6 +452,88 @@ def scan_csv_stream(
         recommendations=recommendations,
         delimiter=detected_delimiter,
         analyzed_at=datetime.now(),
+        score_is_estimated=True,
+    )
+
+
+def scan_jsonl_stream(
+    file_path: Union[str, Path],
+    chunksize: int = 50_000,
+    config: Optional[IragiConfig] = None,
+    critical_columns: Optional[List[str]] = None,
+) -> DataInspectionResult:
+    """Scan JSON Lines incrementally; profile statistics and score are estimates."""
+    from iragi.scan.readers import iter_jsonl_chunks
+
+    path = Path(file_path)
+    cfg = config or get_default_config()
+    total_rows = duplicate_rows = total_missing = 0
+    seen_hashes = set()
+    missing_counts: Dict[str, int] = {}
+    samples: Dict[str, List[Any]] = {}
+    inferred: Dict[str, str] = {}
+    for chunk in iter_jsonl_chunks(path, chunksize):
+        present_columns = {str(col) for col in chunk.columns}
+        for col in chunk.columns:
+            name = str(col)
+            if name not in inferred:
+                inferred[name] = infer_column_type(chunk[col])
+                missing_counts[name] = total_rows
+                samples[name] = []
+                total_missing += total_rows
+        for name in inferred.keys() - present_columns:
+            missing_counts[name] += len(chunk)
+            total_missing += len(chunk)
+        total_rows += len(chunk)
+        total_missing += int(chunk.isna().sum().sum())
+        for value in pd.util.hash_pandas_object(chunk, index=False):
+            digest = int(value)
+            if digest in seen_hashes:
+                duplicate_rows += 1
+            else:
+                seen_hashes.add(digest)
+        for col in chunk.columns:
+            name = str(col)
+            missing_counts[name] += int(chunk[col].isna().sum())
+            if len(samples[name]) < 5000:
+                samples[name].extend(chunk[col].dropna().head(500).tolist())
+
+    profiles = []
+    outliers = invalid_dates = 0
+    for name, kind in inferred.items():
+        sample = pd.Series(samples[name])
+        col_outliers = detect_outliers_iqr(sample, multiplier=cfg.outlier_iqr_multiplier) if kind == "numeric" else 0
+        col_invalid_dates = detect_invalid_dates(sample) if kind == "datetime" else 0
+        outliers += col_outliers
+        invalid_dates += col_invalid_dates
+        profiles.append(ColumnProfile(
+            name=name,
+            inferred_type=kind,
+            total_count=total_rows,
+            missing_count=missing_counts[name],
+            unique_count=int(sample.nunique()) if not sample.empty else 0,
+            invalid_dates_count=col_invalid_dates,
+            outliers_count=col_outliers,
+            summary_stats=compute_column_summary(sample, kind) if not sample.empty else {},
+        ))
+    critical_penalties = {}
+    for col in critical_columns or []:
+        count = missing_counts.get(col, 0)
+        if count:
+            critical_penalties[col] = round(min(30.0, max(10.0, count / total_rows * 30.0)), 2)
+    score = compute_quality_score(
+        total_rows, len(inferred), total_missing, duplicate_rows, outliers,
+        invalid_dates, cfg,
+        empty_columns_count=sum(p.total_count > 0 and p.missing_count == p.total_count for p in profiles),
+        critical_columns_penalties=critical_penalties,
+    )
+    return DataInspectionResult(
+        file_path=str(path), row_count=total_rows, column_count=len(inferred),
+        missing_values_count=total_missing, duplicate_rows_count=duplicate_rows,
+        invalid_dates_count=invalid_dates, potential_outliers_count=outliers,
+        quality_score=score, column_profiles=profiles,
+        recommendations=generate_recommendations(total_missing, duplicate_rows, outliers, invalid_dates),
+        analyzed_at=datetime.now(), score_is_estimated=True,
     )
 
 
@@ -454,7 +545,9 @@ def scan_excel_stream(
     critical_columns: Optional[List[str]] = None,
     column_weights: Optional[Dict[str, float]] = None,
 ) -> DataInspectionResult:
-    """Inspect and profile a large Excel spreadsheet in chunks with bounded memory.
+    """Inspect a large Excel spreadsheet in chunks with an estimated score.
+
+    Duplicate detection retains hashes proportional to the number of distinct rows.
 
     :param file_path: Path to target Excel spreadsheet.
     :type file_path: Union[str, Path]
@@ -480,6 +573,8 @@ def scan_excel_stream(
     path = Path(file_path)
 
     total_rows = 0
+    duplicate_rows = 0
+    seen_row_hashes = set()
     column_count = 0
     missing_counts: Dict[str, int] = {}
     samples_per_col: Dict[str, List[Any]] = {}
@@ -497,6 +592,12 @@ def scan_excel_stream(
                 inferred_types[str_col] = infer_column_type(chunk[col])
 
         total_rows += len(chunk)
+        for row_hash in pd.util.hash_pandas_object(chunk, index=False):
+            value = int(row_hash)
+            if value in seen_row_hashes:
+                duplicate_rows += 1
+            else:
+                seen_row_hashes.add(value)
         for col in chunk.columns:
             str_col = str(col)
             missing_counts[str_col] += int(chunk[col].isna().sum())
@@ -553,7 +654,7 @@ def scan_excel_stream(
         row_count=total_rows,
         column_count=column_count,
         missing_count=total_missing,
-        duplicate_rows=0,
+        duplicate_rows=duplicate_rows,
         outliers_count=total_outliers,
         invalid_dates_count=total_invalid_dates,
         config=cfg,
@@ -564,7 +665,7 @@ def scan_excel_stream(
 
     recommendations = generate_recommendations(
         missing_count=total_missing,
-        duplicate_rows=0,
+        duplicate_rows=duplicate_rows,
         outliers_count=total_outliers,
         invalid_dates_count=total_invalid_dates,
     )
@@ -574,7 +675,7 @@ def scan_excel_stream(
         row_count=total_rows,
         column_count=column_count,
         missing_values_count=total_missing,
-        duplicate_rows_count=0,
+        duplicate_rows_count=duplicate_rows,
         invalid_dates_count=total_invalid_dates,
         potential_outliers_count=total_outliers,
         quality_score=quality_score,
@@ -582,6 +683,7 @@ def scan_excel_stream(
         recommendations=recommendations,
         sheet_names=sheet_names,
         analyzed_at=datetime.now(),
+        score_is_estimated=True,
     )
 
 
@@ -594,6 +696,7 @@ def scan(
     chunksize: int = 50_000,
     critical_columns: Optional[List[str]] = None,
     column_weights: Optional[Dict[str, float]] = None,
+    allowed_hosts=None,
 ) -> DataInspectionResult:
     """Inspect, profile, and evaluate the quality of a CSV, Excel, or JSON file.
 
@@ -605,7 +708,7 @@ def scan(
     :type sheet_name: Optional[Union[str, int]]
     :param delimiter: Optional explicit CSV delimiter.
     :type delimiter: Optional[str]
-    :param stream: If True and target is CSV, use bounded streaming reader.
+    :param stream: If True, use a chunked reader for CSV, Excel and JSON Lines.
     :type stream: bool
     :param chunksize: Chunk size when stream=True (default: 50 000).
     :type chunksize: int
@@ -613,6 +716,8 @@ def scan(
     :type critical_columns: Optional[List[str]]
     :param column_weights: Optional custom importance weights per column.
     :type column_weights: Optional[Dict[str, float]]
+    :param allowed_hosts: Optional host allowlist for remote URLs.
+    :type allowed_hosts: Optional[List[str]]
     :return: Comprehensive DataInspectionResult.
     :rtype: DataInspectionResult
 
@@ -626,7 +731,7 @@ def scan(
         2
     """
     from iragi.core.remote import resolve_file_source
-    path, is_temp = resolve_file_source(file_path)
+    path, is_temp = resolve_file_source(file_path, allowed_hosts=allowed_hosts)
     try:
         if stream:
             suf = path.suffix.lower()
@@ -636,6 +741,13 @@ def scan(
                     chunksize=chunksize,
                     config=config,
                     delimiter=delimiter,
+                    critical_columns=critical_columns,
+                )
+            elif suf in [".jsonl", ".ndjson"]:
+                return scan_jsonl_stream(
+                    path,
+                    chunksize=chunksize,
+                    config=config,
                     critical_columns=critical_columns,
                 )
             elif suf in [".xlsx", ".xls", ".xlsm"]:

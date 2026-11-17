@@ -208,9 +208,47 @@ def extract(
     if not path.is_file():
         raise IragiDataError(f"PDF file not found: {path}")
 
-    metadata = extract_metadata_from_pdf(path)
     if max_pages and not page_range:
         page_range = (1, max_pages)
+
+    pages: List[ExtractedPage] = []
+    full_text_parts: List[str] = []
+    requires_ocr = False
+    try:
+        import pymupdf as fitz
+
+        doc = fitz.open(path)
+        try:
+            metadata = dict(doc.metadata) if doc.metadata else {}
+            metadata["page_count"] = len(doc)
+            start_page = max(1, page_range[0]) if page_range else 1
+            end_page = min(len(doc), page_range[1]) if page_range else len(doc)
+            for page_number in range(start_page, end_page + 1):
+                page = doc[page_number - 1]
+                text = page.get_text() or ""
+                is_scanned = is_page_likely_scanned(text, image_count=len(page.get_images()))
+                if is_scanned:
+                    requires_ocr = True
+                    if enable_ocr:
+                        import io
+                        from PIL import Image
+
+                        image = Image.open(io.BytesIO(page.get_pixmap().tobytes("png")))
+                        recognized = run_ocr_on_image(image)
+                        if recognized:
+                            text = recognized
+                pages.append(ExtractedPage(
+                    page_number=page_number, text=text, is_scanned=is_scanned, tables=[]
+                ))
+                if text:
+                    full_text_parts.append(text)
+        finally:
+            doc.close()
+    except Exception:
+        metadata = extract_metadata_from_pdf(path)
+        pages = list(iter_pdf_pages(path, page_range=page_range, enable_ocr=enable_ocr))
+        full_text_parts = [page.text for page in pages if page.text]
+        requires_ocr = any(page.is_scanned for page in pages)
 
     # Extract tables if enabled
     tables: List[ExtractedTable] = []
@@ -225,18 +263,9 @@ def extract(
     for tbl in tables:
         tables_by_page.setdefault(tbl.page_number, []).append(tbl)
 
-    pages: List[ExtractedPage] = []
-    full_text_parts: List[str] = []
-    requires_ocr = False
-
-    for page_item in iter_pdf_pages(path, page_range=page_range, enable_ocr=enable_ocr):
+    for page_item in pages:
         page_tables = tables_by_page.get(page_item.page_number, [])
         page_item.tables = page_tables
-        if page_item.is_scanned:
-            requires_ocr = True
-        pages.append(page_item)
-        if page_item.text:
-            full_text_parts.append(page_item.text)
 
     return ExtractedDocument(
         file_path=str(path),

@@ -64,6 +64,7 @@ def auto_clean(
     impute_strategies: Optional[Dict[str, Union[str, Any]]] = None,
     contract: Optional[DataContract] = None,
     contract_action: str = "quarantine",
+    sanitize_formulas: bool = True,
 ) -> CleaningResult:
     """Apply remediation, formula imputation, and contract validation to a DataFrame.
 
@@ -100,6 +101,8 @@ def auto_clean(
     :type contract: Optional[DataContract]
     :param contract_action: Action for contract-violating rows: ``'quarantine'``, ``'drop'``, or ``'none'``.
     :type contract_action: str
+    :param sanitize_formulas: Strip spreadsheet formula prefixes from returned data (default: True).
+    :type sanitize_formulas: bool
     :return: CleaningResult containing cleaned DataFrame, quarantined rows, and change log.
     :rtype: CleaningResult
 
@@ -245,6 +248,12 @@ def auto_clean(
                 elif contract_action == "drop":
                     changes["contract_violations_dropped"] = len(sorted_violating)
                 cleaned = cleaned.drop(index=sorted_violating).reset_index(drop=True)
+
+    if sanitize_formulas:
+        from iragi.scan.readers import _sanitize_formulas
+
+        cleaned = _sanitize_formulas(cleaned)
+        quarantine_df = _sanitize_formulas(quarantine_df)
 
     return CleaningResult(
         df=cleaned,

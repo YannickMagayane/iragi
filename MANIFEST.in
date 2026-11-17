@@ -1,6 +1,11 @@
 include README.md
 include LICENSE
 include pyproject.toml
+include CHANGELOG.md
+include bench_suite.py
+include benchmarks/results.json
+
+recursive-include examples *.ipynb
 
 recursive-include iragi *.py
 

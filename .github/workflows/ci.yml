@@ -8,12 +8,17 @@ on:
 
 jobs:
   quality-check:
-    name: Lint, Test, Docs & Packaging Verification
-    runs-on: ubuntu-latest
-
+    name: Python ${{ matrix.python-version }} / pandas ${{ matrix.pandas-spec }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        pandas-spec: [">=2,<3", ">=3,<4"]
+        exclude:
+          - python-version: "3.10"
+            pandas-spec: ">=3,<4"
 
     steps:
       - name: Checkout repository
@@ -26,24 +31,48 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install .[all,docs,test]
-          pip install build twine
+          pip install ".[all,docs,test]" "pandas${{ matrix.pandas-spec }}" pytest-cov pip-audit build twine
 
       - name: Run automated test suite
-        run: |
-          pytest -v
+        shell: bash
+        run: pytest -v --cov=iragi --cov-report=xml --cov-report=term
 
-      - name: Verify Sphinx documentation compilation (strict)
+      - name: Upload coverage report
+        if: runner.os == 'Linux' && matrix.python-version == '3.12' && matrix.pandas-spec == '>=2,<3'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+      - name: Verify clean base installation without Pillow
+        if: runner.os == 'Linux' && matrix.python-version == '3.12' && matrix.pandas-spec == '>=2,<3'
+        shell: bash
+        run: |
+          python -m venv /tmp/iragi-clean-venv
+          /tmp/iragi-clean-venv/bin/python -m pip install .
+          /tmp/iragi-clean-venv/bin/python -c 'import sys; import iragi.scan.engine as engine; import iragi; assert callable(iragi.scan); assert "PIL" not in sys.modules; print(engine.__name__)'
+
+      - name: Audit installed dependencies
+        if: runner.os == 'Linux' && matrix.python-version == '3.12' && matrix.pandas-spec == '>=2,<3'
+        run: pip-audit
+
+      - name: Verify Sphinx documentation compilation
+        if: runner.os == 'Linux' && matrix.python-version == '3.12' && matrix.pandas-spec == '>=2,<3'
+        shell: bash
         run: |
           mkdir -p docs/source/api docs/source/_static docs/source/_templates
           cp README.md docs/source/readme.md
-          [ -f README.fr.md ] && cp README.fr.md docs/source/readme_fr.md
+          cp README.fr.md docs/source/readme_fr.md
           sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi
           sphinx-build -b html docs/source docs/build/html
 
-      - name: Verify package build and twine metadata check
+      - name: Verify package build and metadata
+        if: runner.os == 'Linux' && matrix.python-version == '3.12' && matrix.pandas-spec == '>=2,<3'
+        shell: bash
         run: |
           python -m build
           python -m twine check dist/*

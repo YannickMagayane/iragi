@@ -90,6 +90,24 @@ def test_extract_document_full() -> None:
     Path(pdf_path).unlink()
 
 
+def test_extract_opens_pymupdf_document_once(tmp_path, monkeypatch):
+    import pymupdf
+
+    path = tmp_path / "single-open.pdf"
+    create_sample_pdf(str(path), "One pass for metadata and text")
+    original_open = pymupdf.open
+    opened = []
+
+    def tracked_open(*args, **kwargs):
+        opened.append(args[0])
+        return original_open(*args, **kwargs)
+
+    monkeypatch.setattr(pymupdf, "open", tracked_open)
+    result = extract(path, extract_tables=False)
+    assert result.metadata["page_count"] == 1
+    assert len(opened) == 1
+
+
 def test_extracted_table_to_dataframe() -> None:
     """Verify conversion of ExtractedTable to pandas DataFrame.
 

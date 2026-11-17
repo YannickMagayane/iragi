@@ -11,9 +11,12 @@
 
 <p align="center">
   <a href="https://github.com/YannickMagayane/iragi"><img src="https://img.shields.io/badge/GitHub-YannickMagayane%2Firagi-181717?style=flat&logo=github&logoColor=white" alt="Dépôt GitHub"></a>
-  <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/v/iragi?color=green&label=PyPI" alt="Paquet PyPI"></a>
-  <a href="#objectifs"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
-  <a href="#licence"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="Licence MIT"></a>
+  <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/v/iragi" alt="PyPI"></a>
+  <a href="https://pypi.org/project/iragi/"><img src="https://img.shields.io/pypi/pyversions/iragi" alt="Python"></a>
+  <a href="https://github.com/YannickMagayane/iragi/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/iragi" alt="Licence"></a>
+  <a href="https://pepy.tech/project/iragi"><img src="https://static.pepy.tech/badge/iragi/month" alt="Téléchargements"></a>
+  <a href="https://github.com/YannickMagayane/iragi/actions"><img src="https://img.shields.io/github/actions/workflow/status/YannickMagayane/iragi/ci.yml" alt="CI"></a>
+  <a href="https://codecov.io/gh/YannickMagayane/iragi"><img src="https://codecov.io/gh/YannickMagayane/iragi/branch/main/graph/badge.svg" alt="codecov"></a>
   <a href="https://github.com/YannickMagayane/iragi/tree/main/docs/source"><img src="https://img.shields.io/badge/Docs-Sphinx-orange.svg" alt="Documentation Sphinx"></a>
 </p>
 
@@ -45,7 +48,7 @@ L'objectif est de fournir une bibliothèque réutilisable dans des scripts Pytho
 - [Remédiation déterministe & File de rejet (DLQ)](#remédiation-déterministe--file-de-rejet-dlq-iragiauto_clean)
 - [Réconciliation inter-sources & normalisation Regex](#réconciliation-inter-sources--normalisation-regex-iragireconcile)
 - [Réconciliation multi-sources par consensus](#réconciliation-multi-sources-par-consensus-iragireconcile_multi)
-- [Streaming mémoire bornée pour gros fichiers (CSV, Excel, PDF)](#streaming-mémoire-bornée-pour-gros-fichiers-csv-excel-pdf)
+- [Traitement par blocs des gros fichiers (CSV, Excel, PDF)](#traitement-par-blocs-des-gros-fichiers-csv-excel-pdf)
 - [Interface CLI](#interface-cli)
 - [Rapports](#rapports)
 - [Documentation Sphinx](#documentation-sphinx)
@@ -94,8 +97,8 @@ Le moteur Scan analyse les fichiers structurés ou textuels afin d'en comprendre
 - **Contrats de données (`DataContract`) :** déclarez et appliquez des règles métier par colonne (`not_null`, `positive`, `range`, `regex` avec **protection anti-ReDoS**).
 - **Nettoyage automatique (`auto_clean`) :** remédiation non destructive (déduplication, imputation moyenne/médiane numérique, imputation mode catégorielle).
 - **Détection de dérive (`compare_scans`) :** comparaison de deux scans dans le temps pour identifier les dérives statistiques de qualité.
-- **Streaming réel Big Data (`scan_csv_stream` / `iter_csv_chunks`) :** audit de fichiers CSV multi-gigaoctets avec consommation mémoire constante et bornée en O(chunksize).
-- **Sécurité entreprise :** assainissement des formules CSV (`sanitize_formulas=True`) et détection préventive des bombes Zip/XML Excel.
+- **Traitement par blocs (`scan_csv_stream`, `scan_excel_stream`, `scan_jsonl_stream`) :** lecture des CSV, Excel et JSON Lines par blocs. Le comptage des doublons conserve les empreintes des lignes distinctes en mémoire et le score statistique est estimatif.
+- **Protections d’entrée :** assainissement optionnel des formules CSV, analyse XML renforcée et limites de taille et de compression des archives de feuilles de calcul.
 
 ### 2. `iragi.pdf` — Extraction de documents PDF
 
@@ -172,9 +175,13 @@ pip install "iragi[ocr]"
 pip install "iragi[all]"
 ```
 
+L’extra `pdf` installe [PyMuPDF](https://github.com/pymupdf/PyMuPDF), proposé sous AGPL-3.0 ou sous licence commerciale distincte. Consultez ses [conditions de licence](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright) avant toute distribution.
+
 ---
 
 ## Utilisation en Python
+
+Un notebook prêt à exécuter est disponible dans [examples/quickstart.ipynb](https://github.com/YannickMagayane/iragi/blob/main/examples/quickstart.ipynb).
 
 ### Inspection d'un fichier avec Scan
 
@@ -341,9 +348,9 @@ print(f"Orphelins par système : {res.orphans_by_source}")
 
 ---
 
-## Streaming mémoire bornée pour gros fichiers (CSV, Excel, PDF)
+## Traitement par blocs des gros fichiers (CSV, Excel, PDF)
 
-Éliminez définitivement le risque de saturation mémoire (OOM) lors du traitement de fichiers volumineux :
+Les lecteurs CSV, Excel et JSON Lines peuvent traiter les entrées par blocs. Les scans en streaming conservent les empreintes des lignes distinctes et estiment les statistiques à partir d’échantillons; leur score est marqué comme estimatif. Les itérateurs PDF renvoient les résultats au fil de la lecture.
 
 ```python
 import iragi
@@ -398,7 +405,7 @@ iragi all document.pdf --report html --output ./reports/audit.html
 
 ## Ingestion de fichiers distants et cloud
 
-Iragi accepte n'importe quelle URL HTTP, HTTPS ou FTP partout ou un chemin de fichier local est attendu.
+Iragi accepte les URL HTTP ou HTTPS partout où un chemin de fichier local est attendu. Les requêtes distantes refusent les adresses IP privées ou non routables, suivent au plus cinq redirections validées et peuvent être restreintes avec `allowed_hosts`.
 Aucune configuration n'est necessaire. Les fichiers sont telecharges de maniere transparente, analyses en memoire,
 et la copie temporaire est supprimee automatiquement.
 
@@ -524,15 +531,13 @@ iragi/
 
 ## Socle technologique & Fort Potentiel
 
-**Iragi** a été conçu dès le premier jour pour répondre aux exigences des environnements de production les plus stricts : rapidité d'exécution, fiabilité mathématique et extensibilité totale.
+Iragi s’appuie sur une pile Python courante pour l’inspection tabulaire, l’extraction PDF et la génération de rapports :
 
-Plutôt qu'un simple script ou un notebook jetable, **Iragi est une véritable infrastructure logicielle** construite sur un assemblage réfléchi de briques de pointe :
-
-- **Noyau d'ingestion & calcul haute performance :** Propulsé par **Python 3.14+**, **Pandas 2+** et **NumPy**, le moteur de Scan ingère et traite des millions de cellules en un clin d'œil, calculant avec une précision rigoureuse les écarts statistiques, matrices d'incohérences et métriques de qualité (IQR, cardinalités, doublons).
-- **Moteur d'extraction documentaire universel :** En combinant l'extrême rapidité de **PyMuPDF** pour le texte et les métadonnées avec la précision chirurgicale de **pdfplumber** pour la reconstruction tabulaire, Iragi extrait et structure fidèlement les documents les plus complexes, tout en intégrant des mécanismes prédictifs pour l'OCR (**Tesseract** / **Pillow**).
+- **Inspection tabulaire :** **Python 3.10+**, **Pandas 2+** et **NumPy** pour le profilage, les règles de qualité, les doublons et les statistiques descriptives.
+- **Extraction PDF :** **PyMuPDF** pour le texte et les métadonnées, **pdfplumber** pour les tableaux et Tesseract/Pillow pour l’OCR facultatif.
 - **Expérience développeur & Interface riche :** Une CLI moderne et fluide animée par **Typer** et **Rich**, offrant des diagnostics visuels colorés et lisibles directement dans votre terminal sans configuration préalable.
 - **Rapports & Restitution dynamique :** Moteur de templating **Jinja2** permettant la génération instantanée de synthèses JSON ou de rapports HTML exploitables par les décideurs métiers.
-- **Assurance qualité & Robustesse industrielle :** Couverture complète par des tests automatisés stricts (**pytest**), documentation Sphinx exhaustive et intégration continue garantissant zéro régression.
+- **Vérifications :** Tests automatisés exécutés par GitHub Actions sur Python 3.10–3.13 et pandas 2.x/3.x, avec rapports de couverture Codecov.
 
 ### Un potentiel d'extension illimité
 
@@ -569,7 +574,7 @@ Les contributions sont les bienvenues ! Pour proposer une fonctionnalité ou un 
 
 ## Licence
 
-Ce projet est distribué sous licence [MIT](LICENSE).
+Ce projet est distribué sous licence [MIT](https://github.com/YannickMagayane/iragi/blob/main/LICENSE).
 
 ---
 

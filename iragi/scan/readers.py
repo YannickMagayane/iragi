@@ -10,9 +10,14 @@ Example:
     True
 """
 
+import csv
 import json
 import re
 import zipfile
+from xml.sax import SAXException
+from xml.sax.handler import ContentHandler
+from defusedxml.sax import parse as safe_sax_parse
+from defusedxml.common import DefusedXmlException
 from pathlib import Path
 from typing import Any, Iterator, List, Tuple, Union, Optional
 import pandas as pd
@@ -57,22 +62,54 @@ def _check_zip_bomb(
                         f"Potential Zip Bomb detected: uncompressed size ({total_uncompressed} bytes) "
                         f"exceeds safety threshold ({max_uncompressed_bytes} bytes)."
                     )
-                # Check for XML entity declarations (Billion Laughs defense)
-                if info.filename.endswith(".xml") or info.filename.endswith(".rels"):
-                    header = zf.read(info.filename)[:4096].lower()
-                    if b"<!entity" in header or (b"<!doctype" in header and b"[" in header):
+            ratio = total_uncompressed / total_compressed
+            if ratio > max_ratio and total_uncompressed > 5 * 1024 * 1024:
+                raise IragiDataError(
+                    f"Potential Zip Bomb detected: compression ratio ({ratio:.1f}x) "
+                    f"exceeds safety limit ({max_ratio}x)."
+                )
+            for info in zf.infolist():
+                # Parse XML incrementally with entity/DTD expansion disabled.
+                if info.filename.lower().endswith((".xml", ".rels")):
+                    try:
+                        with zf.open(info, "r") as xml_file:
+                            safe_sax_parse(
+                                xml_file,
+                                ContentHandler(),
+                                forbid_dtd=True,
+                                forbid_entities=True,
+                                forbid_external=True,
+                            )
+                    except DefusedXmlException as exc:
                         raise IragiDataError(
-                            f"Malicious XML entity declaration detected in '{info.filename}' (Billion Laughs defense)."
-                        )
+                            f"Unsafe XML entity or DTD content detected in '{info.filename}': {exc}"
+                        ) from exc
+                    except SAXException as exc:
+                        raise IragiDataError(
+                            f"Invalid XML content in '{info.filename}': {exc}"
+                        ) from exc
     except zipfile.BadZipFile as exc:
         raise IragiDataError(f"Corrupted or invalid zip archive: {exc}") from exc
 
-    ratio = total_uncompressed / total_compressed
-    if ratio > max_ratio and total_uncompressed > 5 * 1024 * 1024:
-        raise IragiDataError(
-            f"Potential Zip Bomb detected: compression ratio ({ratio:.1f}x) "
-            f"exceeds safety limit ({max_ratio}x)."
-        )
+
+
+def _detect_csv_format(path: Path, delimiter: Optional[str]) -> Tuple[str, str]:
+    """Infer encoding and separator from at most the first 1,000 text rows."""
+    encodings = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
+    for encoding in encodings:
+        try:
+            with path.open("r", encoding=encoding, newline="") as stream:
+                sample = "".join(stream.readline() for _ in range(1000))
+            if delimiter:
+                return delimiter, encoding
+            try:
+                detected = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
+            except csv.Error:
+                detected = ","
+            return detected, encoding
+        except UnicodeDecodeError:
+            continue
+    return delimiter or ",", "latin-1"
 
 
 def _sanitize_formulas(df: pd.DataFrame) -> pd.DataFrame:
@@ -141,28 +178,20 @@ def read_csv_file(
     if not path.is_file():
         raise IragiDataError(f"File not found: {path}")
 
-    # Encodings to try, starting with utf-8-sig to automatically strip BOM (\ufeff)
-    encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
-    delimiters = [delimiter] if delimiter else [",", ";", "\t", "|"]
-    last_error: Optional[Exception] = None
-
-    for encoding in encodings:
-        for sep in delimiters:
-            try:
-                df = pd.read_csv(
-                    path, sep=sep, encoding=encoding, engine="python", nrows=nrows
-                )
-                # If multiple columns found, or it's the only delimiter specified
-                if len(df.columns) > 1 or delimiter is not None or sep == delimiters[-1]:
-                    df.attrs["delimiter"] = sep
-                    df.attrs["encoding"] = encoding
-                    if sanitize_formulas:
-                        df = _sanitize_formulas(df)
-                    return df
-            except Exception as exc:
-                last_error = exc
-
-    raise IragiDataError(f"Failed to parse CSV file '{path}': {last_error}")
+    detected_delimiter, detected_encoding = _detect_csv_format(path, delimiter)
+    try:
+        df = pd.read_csv(
+            path,
+            sep=detected_delimiter,
+            encoding=detected_encoding,
+            engine="c",
+            nrows=nrows,
+        )
+        df.attrs["delimiter"] = detected_delimiter
+        df.attrs["encoding"] = detected_encoding
+        return _sanitize_formulas(df) if sanitize_formulas else df
+    except Exception as exc:
+        raise IragiDataError(f"Failed to parse CSV file '{path}': {exc}") from exc
 
 
 def _sanitize_column_names(header: Any) -> List[str]:
@@ -202,6 +231,7 @@ def read_excel_file(
     file_path: Union[str, Path],
     sheet_name: Optional[Union[str, int]] = 0,
     read_only: bool = False,
+    sanitize_formulas: bool = True,
 ) -> pd.DataFrame:
     """Read an Excel workbook (.xlsx or .xls) into a pandas DataFrame.
 
@@ -214,6 +244,8 @@ def read_excel_file(
     :type sheet_name: Optional[Union[str, int]]
     :param read_only: If True, uses memory-efficient streaming reading.
     :type read_only: bool
+    :param sanitize_formulas: Strip spreadsheet formula prefixes (default: True).
+    :type sanitize_formulas: bool
     :return: Loaded pandas DataFrame.
     :rtype: pd.DataFrame
     :raises IragiDataError: If Excel reading fails.
@@ -251,6 +283,8 @@ def read_excel_file(
                 else:
                     cols = _sanitize_column_names(header)
                     df = pd.DataFrame(rows_gen, columns=cols)
+                if sanitize_formulas:
+                    df = _sanitize_formulas(df)
                 df.attrs["sheet_names"] = sheet_names
                 df.attrs["sheet_name"] = str(sheet_name)
                 return df
@@ -260,6 +294,8 @@ def read_excel_file(
         excel_file = pd.ExcelFile(path)
         all_sheets = excel_file.sheet_names
         df = pd.read_excel(excel_file, sheet_name=sheet_name)
+        if sanitize_formulas:
+            df = _sanitize_formulas(df)
         df.attrs["sheet_names"] = all_sheets
         df.attrs["sheet_name"] = str(sheet_name)
         return df
@@ -271,6 +307,7 @@ def iter_excel_chunks(
     file_path: Union[str, Path],
     sheet_name: Optional[Union[str, int]] = 0,
     chunksize: int = 50_000,
+    sanitize_formulas: bool = True,
 ) -> Iterator[pd.DataFrame]:
     """Yield successive DataFrame chunks from an Excel spreadsheet.
 
@@ -282,6 +319,8 @@ def iter_excel_chunks(
     :type sheet_name: Optional[Union[str, int]]
     :param chunksize: Number of rows per yielded DataFrame chunk (default: 50 000).
     :type chunksize: int
+    :param sanitize_formulas: Strip spreadsheet formula prefixes from cells (default: True).
+    :type sanitize_formulas: bool
     :return: Iterator yielding DataFrame slices.
     :rtype: Iterator[pd.DataFrame]
     :raises IragiDataError: If reading fails or file is not found.
@@ -325,6 +364,8 @@ def iter_excel_chunks(
                     current_chunk.append(row)
                     if len(current_chunk) >= chunksize:
                         chunk_df = pd.DataFrame(current_chunk, columns=cols)
+                        if sanitize_formulas:
+                            chunk_df = _sanitize_formulas(chunk_df)
                         chunk_df.attrs["sheet_names"] = sheet_names
                         chunk_df.attrs["sheet_name"] = str(target)
                         yield chunk_df
@@ -332,6 +373,8 @@ def iter_excel_chunks(
 
                 if current_chunk:
                     chunk_df = pd.DataFrame(current_chunk, columns=cols)
+                    if sanitize_formulas:
+                        chunk_df = _sanitize_formulas(chunk_df)
                     chunk_df.attrs["sheet_names"] = sheet_names
                     chunk_df.attrs["sheet_name"] = str(target)
                     yield chunk_df
@@ -341,6 +384,8 @@ def iter_excel_chunks(
             full_df = read_excel_file(path, sheet_name=sheet_name)
             for i in range(0, len(full_df), chunksize):
                 chunk = full_df.iloc[i : i + chunksize].copy()
+                if sanitize_formulas:
+                    chunk = _sanitize_formulas(chunk)
                 chunk.attrs["sheet_names"] = full_df.attrs.get("sheet_names", [])
                 chunk.attrs["sheet_name"] = full_df.attrs.get("sheet_name", str(sheet_name))
                 yield chunk
@@ -401,6 +446,9 @@ def read_json_file(file_path: Union[str, Path]) -> pd.DataFrame:
     _check_zip_bomb(path)
 
     try:
+        if path.suffix.lower() in {".jsonl", ".ndjson"}:
+            chunks = list(iter_jsonl_chunks(path, chunksize=50_000))
+            return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
         # First attempt standard JSON loading
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -418,11 +466,27 @@ def read_json_file(file_path: Union[str, Path]) -> pd.DataFrame:
     except json.JSONDecodeError:
         # Fallback to JSON Lines (ndjson)
         try:
-            return pd.read_json(path, lines=True)
+            chunks = list(iter_jsonl_chunks(path, chunksize=50_000))
+            return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
         except Exception as exc:
             raise IragiDataError(f"Failed to parse JSON file '{path}': {exc}") from exc
     except Exception as exc:
         raise IragiDataError(f"Failed to read JSON data from '{path}': {exc}") from exc
+
+
+def iter_jsonl_chunks(
+    file_path: Union[str, Path], chunksize: int = 50_000
+) -> Iterator[pd.DataFrame]:
+    """Yield JSON Lines records in chunks rather than parsing the complete file."""
+    path = Path(file_path)
+    if not path.is_file():
+        raise IragiDataError(f"File not found: {path}")
+    try:
+        reader = pd.read_json(path, lines=True, chunksize=chunksize)
+        for chunk in reader:
+            yield chunk
+    except Exception as exc:
+        raise IragiDataError(f"Failed streaming JSON Lines from '{path}': {exc}") from exc
 
 
 def iter_csv_chunks(
