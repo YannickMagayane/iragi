@@ -534,25 +534,31 @@ La CI exécute pytest. Les commandes `bin/docs`, `python -m build` et `python -m
 
 ## Architecture du projet
 
+Le package sépare la lecture et l'analyse des fichiers, l'orchestration et la présentation. `scan`, `pdf` et `reconcile` sont utilisables séparément ; `all` les compose pour les parcours combinés. La CLI expose les API Python publiques.
+
 ```text
-iragi/
-  core/       configuration, modèles, erreurs et entrées distantes
-  scan/       lecteurs, profilage, contrats, nettoyage, dérive et rapports
-  pdf/        extraction, tableaux, outils OCR et modèles
-  reconcile/  rapprochement inter-sources et détection des conflits
-  all/        orchestration des analyses combinées
-  cli/        interface en ligne de commande
-tests/        tests automatisés
-examples/     exemples et notebooks
-benchmarks/   outil reproductible, résultats bruts et graphiques
-docs/source/  documentation Sphinx
-bin/          outils de génération de la documentation
-bench_suite.py
-pyproject.toml
-CHANGELOG.md
+iragi/                         package Python installable
+├── core/                      modèles, configuration, erreurs, accès distant
+├── scan/                      lecteurs, profilage, contrats, nettoyage, dérive, rapports
+├── pdf/                       extraction, tableaux, outils OCR, modèles
+├── reconcile/                 clés, normalisation, conflits, consensus
+├── all/                       analyse combinée Scan/PDF et traitements par lots
+└── cli/                       interface en ligne de commande
+tests/                         tests et jeux de données de test
+examples/                      intégrations Python et notebook de démarrage
+benchmarks/                    outil, résultats JSON bruts et graphiques SVG
+docs/source/                   configuration Sphinx, API, guides et graphiques
+bin/                           scripts de build, tests, publication et documentation
+.github/workflows/             workflows CI et publication du package
+bench_suite.py                 point d'entrée du benchmark reproductible
+pyproject.toml                 métadonnées, dépendances et configuration des outils
+CHANGELOG.md                   historique des versions
+CONTRIBUTING.md                guide de contribution
 ```
 
-Les API publiques sont réparties entre `scan`, `pdf` et `reconcile` ; `all` coordonne ces modules. Cette arborescence suit les sources présentes dans le dépôt. Les mesures et la CI aident à reproduire les vérifications, sans constituer un engagement de niveau de service.
+Le flux principal est le suivant : les lecteurs chargent les fichiers ou les parcourent par blocs ; Scan profile et valide les données tabulaires ; PDF extrait le contenu des documents ; Reconcile rapproche des sources distinctes ; All coordonne ces composants ; les rapports et la CLI présentent les résultats. La lecture par blocs réduit la taille des lots, mais le suivi des doublons conserve en mémoire les empreintes des lignes distinctes. Le streaming ne fixe donc pas une limite maximale à la mémoire du processus. Les dépendances PDF et OCR sont optionnelles et s'installent avec les extras correspondants.
+
+La page [Architecture de la documentation Sphinx](https://github.com/YannickMagayane/iragi/blob/main/docs/source/architecture.rst) décrit les responsabilités des modules et le flux de données.
 
 ---
 

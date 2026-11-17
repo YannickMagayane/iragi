@@ -13,6 +13,7 @@ qui orchestre leur fonctionnement dans un pipeline unifié.
 
    readme
    readme_fr
+   architecture
    api/modules
 
 Indices and tables

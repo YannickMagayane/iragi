@@ -511,6 +511,34 @@ On this recorded machine and fixture, Iragi's measured advantage is functional b
 
 Run it with `python bench_suite.py --rows 100000 --excel-rows 25000 --reconcile-rows 10000 --chunksize 10000 --repeat 5`. It writes JSON results, workload and exactness charts, and English/French capability charts under `benchmarks/`. CI runs pytest; `bin/docs`, `python -m build`, and `python -m twine check dist/*` build the docs and distribution artifacts locally.
 
+## Project Architecture
+
+The package separates file reading and analysis from orchestration and presentation. `scan`, `pdf`, and `reconcile` can be used independently; `all` composes them for combined workflows. The CLI is a thin entry point over the public Python APIs.
+
+```text
+iragi/                         installable Python package
+├── core/                      shared models, configuration, errors, remote fetching
+├── scan/                      tabular readers, profiling, contracts, cleaning, drift, reports
+├── pdf/                       PDF extraction, tables, OCR helpers, result models
+├── reconcile/                 key matching, normalization, conflicts, consensus
+├── all/                       combined Scan/PDF analysis and batch orchestration
+└── cli/                       command-line interface
+tests/                         unit and integration tests, plus test fixtures
+examples/                      Python integrations and quickstart notebook
+benchmarks/                    benchmark runner, raw JSON results, generated SVG charts
+docs/source/                   Sphinx configuration, API reference, README guides, charts
+bin/                           build, test, publish, and documentation scripts
+.github/workflows/             CI and package publishing workflows
+bench_suite.py                 reproducible benchmark entry point
+pyproject.toml                 package metadata, dependencies, and tool settings
+CHANGELOG.md                   release history
+CONTRIBUTING.md                contribution guidance
+```
+
+The main data flow is: readers load or stream inputs; Scan profiles and validates tabular data; PDF extracts document content; Reconcile matches independent sources; All coordinates those components; reports and the CLI present results. Chunked readers lower the input batch size, while duplicate tracking retains hashes for distinct rows. Therefore streaming does not impose a fixed upper bound on total process memory. Optional PDF and OCR dependencies are installed through extras; the core package supports tabular processing.
+
+See the [Sphinx architecture page](https://github.com/YannickMagayane/iragi/blob/main/docs/source/architecture.rst) for the module responsibilities and data-flow diagram.
+
 ## Changelog
 
 See [CHANGELOG.md](https://github.com/YannickMagayane/iragi/blob/main/CHANGELOG.md) for release notes.
