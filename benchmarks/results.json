@@ -1,280 +1,1158 @@
 {
   "fixture": {
     "csv_rows": 100000,
-    "csv_columns": 3,
     "csv_expected_duplicate_rows": 10000,
-    "csv_duplicate_rate_percent": 10.0,
-    "pdf_pages": 100
+    "jsonl_rows": 100000,
+    "excel_rows": 25000,
+    "reconciliation_rows_per_source": 10000,
+    "pdf_pages": 100,
+    "csv_columns": 3,
+    "csv_duplicate_rate_percent": 10.0
   },
   "repeat": 5,
   "warmups_per_mode": 1,
   "chunksize": 10000,
   "environment": {
-    "iragi": "0.6.3",
+    "iragi": "0.6.4",
     "python": "3.14.4",
     "pandas": "3.1.1",
     "platform": "Linux-7.0.0-43-generic-x86_64-inconnu-with-glibc2.43",
     "cpu_count": 16
   },
+  "framework_comparison": [
+    {
+      "name": "Iragi",
+      "distribution": "iragi",
+      "focus": "File inspection, profiling, quality scoring",
+      "scope": "Runtime and Python-traced allocation recorded for each included workload",
+      "installed": true,
+      "version": "0.6.4",
+      "timed": true,
+      "status": "benchmarked across the workloads in this report"
+    },
+    {
+      "name": "Great Expectations",
+      "distribution": "great_expectations",
+      "focus": "Expectation-based data validation",
+      "scope": "Validation; setup and suites are configurable",
+      "installed": false,
+      "version": null,
+      "timed": false,
+      "status": "not timed; optional package is not installed"
+    },
+    {
+      "name": "Pandera",
+      "distribution": "pandera",
+      "focus": "Pandas DataFrame schema validation",
+      "scope": "Schema and custom checks on in-memory frames",
+      "installed": false,
+      "version": null,
+      "timed": false,
+      "status": "not timed; optional package is not installed"
+    },
+    {
+      "name": "ydata-profiling",
+      "distribution": "ydata-profiling",
+      "focus": "Descriptive profiling and HTML reports",
+      "scope": "Statistical profiling; broader work than validation",
+      "installed": false,
+      "version": null,
+      "timed": false,
+      "status": "not timed; optional package is not installed"
+    },
+    {
+      "name": "Soda Core",
+      "distribution": "soda-core",
+      "focus": "SodaCL checks for data sources",
+      "scope": "Pandas adapter and Soda Cloud configuration needed for DataFrames",
+      "installed": false,
+      "version": null,
+      "pandas_adapter_installed": null,
+      "cloud_credentials_configured": false,
+      "timed": false,
+      "status": "needs optional adapter and Soda Cloud credentials for in-memory DataFrame scans"
+    }
+  ],
+  "capability_matrix": [
+    {
+      "name": "Profiling",
+      "values": {
+        "Iragi": "Yes",
+        "Great Expectations": "Partial",
+        "Pandera": "No",
+        "ydata-profiling": "Yes",
+        "Soda Core": "Partial"
+      }
+    },
+    {
+      "name": "Contracts / rules",
+      "values": {
+        "Iragi": "Yes",
+        "Great Expectations": "Yes",
+        "Pandera": "Yes",
+        "ydata-profiling": "Partial",
+        "Soda Core": "Yes"
+      }
+    },
+    {
+      "name": "PDF extraction",
+      "values": {
+        "Iragi": "Yes",
+        "Great Expectations": "No",
+        "Pandera": "No",
+        "ydata-profiling": "No",
+        "Soda Core": "No"
+      }
+    },
+    {
+      "name": "Reconciliation",
+      "values": {
+        "Iragi": "Yes",
+        "Great Expectations": "Partial",
+        "Pandera": "Partial",
+        "ydata-profiling": "No",
+        "Soda Core": "Partial"
+      }
+    },
+    {
+      "name": "Auto-clean + DLQ",
+      "values": {
+        "Iragi": "Yes",
+        "Great Expectations": "No",
+        "Pandera": "No",
+        "ydata-profiling": "No",
+        "Soda Core": "No"
+      }
+    },
+    {
+      "name": "Large-file streaming",
+      "values": {
+        "Iragi": "Yes",
+        "Great Expectations": "Partial",
+        "Pandera": "Partial",
+        "ydata-profiling": "Partial",
+        "Soda Core": "Partial"
+      }
+    }
+  ],
   "method_notes": [
-    "Each sample runs in a fresh subprocess; imports are excluded from elapsed time.",
+    "Each timed sample runs in a fresh subprocess after an unmeasured warm-up; library imports are excluded.",
     "Pandas read_csv is a parser-only baseline; Iragi scans also profile, score and count duplicates.",
-    "PDF compares PyMuPDF text extraction with Iragi extract(extract_tables=False); normalized SHA-256 checks text equality.",
+    "JSONL compares pandas parsing with Iragi streaming profiling; these operations do different work.",
+    "Excel compares full and chunked Iragi scans of the same generated workbook.",
+    "Contract validation and auto-clean with quarantine use the 100,000-row CSV fixture; reconciliation uses two separate 10,000-row CSV fixtures. Compare each operation on its own terms.",
+    "PDF compares PyMuPDF text-only, full Iragi extraction, and Iragi page iteration; normalized SHA-256 checks text equality.",
     "Python-traced peak excludes native allocations and is not total process RAM.",
-    "Medians, min/max and raw samples are reported; results describe this machine and fixture only."
+    "Medians, min/max and raw samples are reported; results describe this machine and fixture only.",
+    "Ground-truth score is the percentage of exact seeded-output checks passed, not general accuracy or validation of the quality score.",
+    "The framework capability matrix is descriptive; competitor runtimes are not measured by this Iragi workload suite.",
+    "Soda Core's in-memory DataFrame integration requires its pandas adapter and Soda Cloud configuration; no Soda timing is claimed here."
   ],
   "comparisons": {
-    "csv_stream_vs_classic_time_ratio": 3.6458065581100647,
-    "csv_stream_python_traced_peak_change_percent": 51.77863015760145,
-    "iragi_classic_vs_pandas_parse_time_ratio": 3.417517726096505,
-    "iragi_pdf_vs_pymupdf_time_ratio": 1.1350855960837825,
-    "pdf_normalized_text_matches": true
+    "csv_stream_vs_classic_time_ratio": 3.8186114781185165,
+    "csv_stream_python_traced_peak_change_percent": 51.762738621332474,
+    "iragi_classic_vs_pandas_parse_time_ratio": 3.2690021883721236,
+    "iragi_jsonl_stream_vs_pandas_parse_time_ratio": 1.183825197173707,
+    "iragi_excel_stream_vs_classic_time_ratio": 0.9785215184675528,
+    "iragi_pdf_vs_pymupdf_time_ratio": 43.80366629966121,
+    "pdf_normalized_text_matches": true,
+    "iragi_pdf_page_stream_vs_full_time_ratio": 1.0156821708847767
   },
   "pdf_normalized_text_matches": true,
   "results": {
     "csv": {
       "pandas_read_csv": {
-        "median_seconds": 0.02949774399985472,
-        "min_seconds": 0.029465053000421904,
-        "max_seconds": 0.03006435200040869,
-        "median_python_traced_peak_bytes": 2102110,
+        "median_seconds": 0.03226142899984552,
+        "min_seconds": 0.02864229199985857,
+        "max_seconds": 0.03768979900087288,
+        "median_python_traced_peak_bytes": 2092660,
         "samples": [
           {
-            "seconds": 0.029465053000421904,
-            "python_traced_peak_bytes": 2102110,
+            "seconds": 0.02864229199985857,
+            "python_traced_peak_bytes": 2092660,
             "rows": 100000,
             "columns": 3
           },
           {
-            "seconds": 0.029475792999619443,
-            "python_traced_peak_bytes": 2102110,
+            "seconds": 0.03226142899984552,
+            "python_traced_peak_bytes": 2092660,
             "rows": 100000,
             "columns": 3
           },
           {
-            "seconds": 0.03006435200040869,
-            "python_traced_peak_bytes": 2102110,
+            "seconds": 0.032286132000081125,
+            "python_traced_peak_bytes": 2092615,
             "rows": 100000,
             "columns": 3
           },
           {
-            "seconds": 0.0300264210000023,
-            "python_traced_peak_bytes": 2102065,
+            "seconds": 0.03077392500017595,
+            "python_traced_peak_bytes": 2092660,
             "rows": 100000,
             "columns": 3
           },
           {
-            "seconds": 0.02949774399985472,
-            "python_traced_peak_bytes": 2102110,
+            "seconds": 0.03768979900087288,
+            "python_traced_peak_bytes": 2092615,
             "rows": 100000,
             "columns": 3
           }
         ],
-        "seconds": 0.02949774399985472,
-        "python_traced_peak_bytes": 2102110,
+        "seconds": 0.03768979900087288,
+        "python_traced_peak_bytes": 2092615,
         "rows": 100000,
         "columns": 3
       },
       "iragi_classic": {
-        "median_seconds": 0.10080906299936032,
-        "min_seconds": 0.09829644999990705,
-        "max_seconds": 0.10204961999988882,
-        "median_python_traced_peak_bytes": 7229693,
+        "median_seconds": 0.1054626820005069,
+        "min_seconds": 0.100443950999761,
+        "max_seconds": 0.11906995699973777,
+        "median_python_traced_peak_bytes": 7228922,
         "samples": [
           {
-            "seconds": 0.10080906299936032,
-            "python_traced_peak_bytes": 7229826,
+            "seconds": 0.10323118499945849,
+            "python_traced_peak_bytes": 7228833,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000
           },
           {
-            "seconds": 0.10204961999988882,
-            "python_traced_peak_bytes": 7229488,
+            "seconds": 0.1054626820005069,
+            "python_traced_peak_bytes": 7229176,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000
           },
           {
-            "seconds": 0.10194370000044728,
-            "python_traced_peak_bytes": 7229549,
+            "seconds": 0.11191836000034527,
+            "python_traced_peak_bytes": 7228922,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000
           },
           {
-            "seconds": 0.09930231499947695,
-            "python_traced_peak_bytes": 7229693,
+            "seconds": 0.100443950999761,
+            "python_traced_peak_bytes": 7229106,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000
           },
           {
-            "seconds": 0.09829644999990705,
-            "python_traced_peak_bytes": 7229806,
+            "seconds": 0.11906995699973777,
+            "python_traced_peak_bytes": 7228871,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000
           }
         ],
-        "seconds": 0.09829644999990705,
-        "python_traced_peak_bytes": 7229806,
+        "seconds": 0.11906995699973777,
+        "python_traced_peak_bytes": 7228871,
         "rows": 100000,
         "score": 97.5,
         "duplicate_rows": 10000
       },
       "iragi_stream": {
-        "median_seconds": 0.36753034299999854,
-        "min_seconds": 0.360815654000362,
-        "max_seconds": 0.4070459980002852,
-        "median_python_traced_peak_bytes": 10973129,
+        "median_seconds": 0.40272100800029875,
+        "min_seconds": 0.37479189000077895,
+        "max_seconds": 0.43930371799979184,
+        "median_python_traced_peak_bytes": 10970810,
         "samples": [
           {
-            "seconds": 0.360815654000362,
-            "python_traced_peak_bytes": 10973272,
+            "seconds": 0.37479189000077895,
+            "python_traced_peak_bytes": 10970848,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000,
             "score_is_estimated": true
           },
           {
-            "seconds": 0.36753034299999854,
-            "python_traced_peak_bytes": 10973123,
+            "seconds": 0.4083572780000395,
+            "python_traced_peak_bytes": 10970678,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000,
             "score_is_estimated": true
           },
           {
-            "seconds": 0.3840140430002066,
-            "python_traced_peak_bytes": 10973262,
+            "seconds": 0.40272100800029875,
+            "python_traced_peak_bytes": 10971067,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000,
             "score_is_estimated": true
           },
           {
-            "seconds": 0.36262225799964654,
-            "python_traced_peak_bytes": 10972894,
+            "seconds": 0.375602758000241,
+            "python_traced_peak_bytes": 10970810,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000,
             "score_is_estimated": true
           },
           {
-            "seconds": 0.4070459980002852,
-            "python_traced_peak_bytes": 10973129,
+            "seconds": 0.43930371799979184,
+            "python_traced_peak_bytes": 10970698,
             "rows": 100000,
             "score": 97.5,
             "duplicate_rows": 10000,
             "score_is_estimated": true
           }
         ],
-        "seconds": 0.4070459980002852,
-        "python_traced_peak_bytes": 10973129,
+        "seconds": 0.43930371799979184,
+        "python_traced_peak_bytes": 10970698,
         "rows": 100000,
         "score": 97.5,
         "duplicate_rows": 10000,
         "score_is_estimated": true
       }
     },
+    "jsonl": {
+      "pandas_read_jsonl": {
+        "median_seconds": 1.4473783360008383,
+        "min_seconds": 1.3752422010002192,
+        "max_seconds": 1.5032888780006033,
+        "median_python_traced_peak_bytes": 87581026,
+        "samples": [
+          {
+            "seconds": 1.4385643100013112,
+            "python_traced_peak_bytes": 87581026,
+            "rows": 100000,
+            "columns": 3
+          },
+          {
+            "seconds": 1.4473783360008383,
+            "python_traced_peak_bytes": 87581026,
+            "rows": 100000,
+            "columns": 3
+          },
+          {
+            "seconds": 1.4925798420008505,
+            "python_traced_peak_bytes": 87581026,
+            "rows": 100000,
+            "columns": 3
+          },
+          {
+            "seconds": 1.5032888780006033,
+            "python_traced_peak_bytes": 87580967,
+            "rows": 100000,
+            "columns": 3
+          },
+          {
+            "seconds": 1.3752422010002192,
+            "python_traced_peak_bytes": 87581026,
+            "rows": 100000,
+            "columns": 3
+          }
+        ],
+        "seconds": 1.3752422010002192,
+        "python_traced_peak_bytes": 87581026,
+        "rows": 100000,
+        "columns": 3
+      },
+      "iragi_jsonl_stream": {
+        "median_seconds": 1.7134429440011445,
+        "min_seconds": 1.6316326710002613,
+        "max_seconds": 1.8785438739996607,
+        "median_python_traced_peak_bytes": 16653585,
+        "samples": [
+          {
+            "seconds": 1.6316326710002613,
+            "python_traced_peak_bytes": 16653342,
+            "rows": 100000,
+            "duplicate_rows": 10000,
+            "score": 97.5,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 1.8785438739996607,
+            "python_traced_peak_bytes": 16653585,
+            "rows": 100000,
+            "duplicate_rows": 10000,
+            "score": 97.5,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 1.6590969709995989,
+            "python_traced_peak_bytes": 16653458,
+            "rows": 100000,
+            "duplicate_rows": 10000,
+            "score": 97.5,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 1.7134429440011445,
+            "python_traced_peak_bytes": 16653646,
+            "rows": 100000,
+            "duplicate_rows": 10000,
+            "score": 97.5,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 1.772834364001028,
+            "python_traced_peak_bytes": 16653669,
+            "rows": 100000,
+            "duplicate_rows": 10000,
+            "score": 97.5,
+            "score_is_estimated": true
+          }
+        ],
+        "seconds": 1.772834364001028,
+        "python_traced_peak_bytes": 16653669,
+        "rows": 100000,
+        "duplicate_rows": 10000,
+        "score": 97.5,
+        "score_is_estimated": true
+      }
+    },
+    "excel": {
+      "iragi_excel_classic": {
+        "median_seconds": 4.148663250000027,
+        "min_seconds": 3.8806499099991925,
+        "max_seconds": 4.497560155001338,
+        "median_python_traced_peak_bytes": 15281484,
+        "samples": [
+          {
+            "seconds": 4.043453803999,
+            "python_traced_peak_bytes": 15281911,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500
+          },
+          {
+            "seconds": 4.443087319999904,
+            "python_traced_peak_bytes": 15282761,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500
+          },
+          {
+            "seconds": 3.8806499099991925,
+            "python_traced_peak_bytes": 15281264,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500
+          },
+          {
+            "seconds": 4.497560155001338,
+            "python_traced_peak_bytes": 15281484,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500
+          },
+          {
+            "seconds": 4.148663250000027,
+            "python_traced_peak_bytes": 15280916,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500
+          }
+        ],
+        "seconds": 4.148663250000027,
+        "python_traced_peak_bytes": 15280916,
+        "rows": 25000,
+        "score": 97.5,
+        "duplicate_rows": 2500
+      },
+      "iragi_excel_stream": {
+        "median_seconds": 4.059556263000559,
+        "min_seconds": 3.5810081790004915,
+        "max_seconds": 4.178524909999396,
+        "median_python_traced_peak_bytes": 14220489,
+        "samples": [
+          {
+            "seconds": 4.059556263000559,
+            "python_traced_peak_bytes": 14222958,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 3.9038989919990854,
+            "python_traced_peak_bytes": 14220489,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 3.5810081790004915,
+            "python_traced_peak_bytes": 14221709,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 4.178524909999396,
+            "python_traced_peak_bytes": 14219941,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 4.117182075999153,
+            "python_traced_peak_bytes": 14218413,
+            "rows": 25000,
+            "score": 97.5,
+            "duplicate_rows": 2500,
+            "score_is_estimated": true
+          }
+        ],
+        "seconds": 4.117182075999153,
+        "python_traced_peak_bytes": 14218413,
+        "rows": 25000,
+        "score": 97.5,
+        "duplicate_rows": 2500,
+        "score_is_estimated": true
+      }
+    },
+    "operations": {
+      "iragi_contract_validation": {
+        "median_seconds": 0.004178093999144039,
+        "min_seconds": 0.0038201970000955043,
+        "max_seconds": 0.0048553209999226965,
+        "median_python_traced_peak_bytes": 1610209,
+        "samples": [
+          {
+            "seconds": 0.004667344001063611,
+            "python_traced_peak_bytes": 1610209,
+            "rows": 100000,
+            "rules": 2,
+            "rule_failure_counts": {
+              "positive": 10,
+              "range": 10
+            }
+          },
+          {
+            "seconds": 0.0038201970000955043,
+            "python_traced_peak_bytes": 1610209,
+            "rows": 100000,
+            "rules": 2,
+            "rule_failure_counts": {
+              "positive": 10,
+              "range": 10
+            }
+          },
+          {
+            "seconds": 0.004178093999144039,
+            "python_traced_peak_bytes": 1610209,
+            "rows": 100000,
+            "rules": 2,
+            "rule_failure_counts": {
+              "positive": 10,
+              "range": 10
+            }
+          },
+          {
+            "seconds": 0.0048553209999226965,
+            "python_traced_peak_bytes": 1610209,
+            "rows": 100000,
+            "rules": 2,
+            "rule_failure_counts": {
+              "positive": 10,
+              "range": 10
+            }
+          },
+          {
+            "seconds": 0.00404454599993187,
+            "python_traced_peak_bytes": 1610209,
+            "rows": 100000,
+            "rules": 2,
+            "rule_failure_counts": {
+              "positive": 10,
+              "range": 10
+            }
+          }
+        ],
+        "seconds": 0.00404454599993187,
+        "python_traced_peak_bytes": 1610209,
+        "rows": 100000,
+        "rules": 2,
+        "rule_failure_counts": {
+          "positive": 10,
+          "range": 10
+        }
+      },
+      "iragi_auto_clean_dlq": {
+        "median_seconds": 0.2854630340007134,
+        "min_seconds": 0.27829441700123425,
+        "max_seconds": 0.3109191679996002,
+        "median_python_traced_peak_bytes": 15465798,
+        "samples": [
+          {
+            "seconds": 0.2854630340007134,
+            "python_traced_peak_bytes": 15465894,
+            "input_rows": 100000,
+            "clean_rows": 89991,
+            "quarantined_rows": 9,
+            "duplicates_removed": 10000,
+            "contract_rule_violations": 1
+          },
+          {
+            "seconds": 0.27829441700123425,
+            "python_traced_peak_bytes": 15465743,
+            "input_rows": 100000,
+            "clean_rows": 89991,
+            "quarantined_rows": 9,
+            "duplicates_removed": 10000,
+            "contract_rule_violations": 1
+          },
+          {
+            "seconds": 0.3109191679996002,
+            "python_traced_peak_bytes": 15465798,
+            "input_rows": 100000,
+            "clean_rows": 89991,
+            "quarantined_rows": 9,
+            "duplicates_removed": 10000,
+            "contract_rule_violations": 1
+          },
+          {
+            "seconds": 0.2947298700000829,
+            "python_traced_peak_bytes": 15465800,
+            "input_rows": 100000,
+            "clean_rows": 89991,
+            "quarantined_rows": 9,
+            "duplicates_removed": 10000,
+            "contract_rule_violations": 1
+          },
+          {
+            "seconds": 0.28222674099924916,
+            "python_traced_peak_bytes": 15465743,
+            "input_rows": 100000,
+            "clean_rows": 89991,
+            "quarantined_rows": 9,
+            "duplicates_removed": 10000,
+            "contract_rule_violations": 1
+          }
+        ],
+        "seconds": 0.28222674099924916,
+        "python_traced_peak_bytes": 15465743,
+        "input_rows": 100000,
+        "clean_rows": 89991,
+        "quarantined_rows": 9,
+        "duplicates_removed": 10000,
+        "contract_rule_violations": 1
+      },
+      "iragi_reconciliation": {
+        "median_seconds": 0.2262281740004255,
+        "min_seconds": 0.22399220599982073,
+        "max_seconds": 0.22870059999877412,
+        "median_python_traced_peak_bytes": 7555016,
+        "samples": [
+          {
+            "seconds": 0.2262281740004255,
+            "python_traced_peak_bytes": 7555019,
+            "source_a_rows": 10000,
+            "source_b_rows": 10000,
+            "matched": 5000,
+            "orphans_a": 5000,
+            "orphans_b": 5000,
+            "conflict_counts": {
+              "amount": 500
+            }
+          },
+          {
+            "seconds": 0.22399220599982073,
+            "python_traced_peak_bytes": 7555019,
+            "source_a_rows": 10000,
+            "source_b_rows": 10000,
+            "matched": 5000,
+            "orphans_a": 5000,
+            "orphans_b": 5000,
+            "conflict_counts": {
+              "amount": 500
+            }
+          },
+          {
+            "seconds": 0.22708887199951278,
+            "python_traced_peak_bytes": 7555016,
+            "source_a_rows": 10000,
+            "source_b_rows": 10000,
+            "matched": 5000,
+            "orphans_a": 5000,
+            "orphans_b": 5000,
+            "conflict_counts": {
+              "amount": 500
+            }
+          },
+          {
+            "seconds": 0.22870059999877412,
+            "python_traced_peak_bytes": 7554971,
+            "source_a_rows": 10000,
+            "source_b_rows": 10000,
+            "matched": 5000,
+            "orphans_a": 5000,
+            "orphans_b": 5000,
+            "conflict_counts": {
+              "amount": 500
+            }
+          },
+          {
+            "seconds": 0.2247618870005681,
+            "python_traced_peak_bytes": 7554919,
+            "source_a_rows": 10000,
+            "source_b_rows": 10000,
+            "matched": 5000,
+            "orphans_a": 5000,
+            "orphans_b": 5000,
+            "conflict_counts": {
+              "amount": 500
+            }
+          }
+        ],
+        "seconds": 0.2247618870005681,
+        "python_traced_peak_bytes": 7554919,
+        "source_a_rows": 10000,
+        "source_b_rows": 10000,
+        "matched": 5000,
+        "orphans_a": 5000,
+        "orphans_b": 5000,
+        "conflict_counts": {
+          "amount": 500
+        }
+      }
+    },
     "pdf": {
       "pymupdf_text_only": {
-        "median_seconds": 0.04838007299986202,
-        "min_seconds": 0.04784080699937476,
-        "max_seconds": 0.05138880100003007,
-        "median_python_traced_peak_bytes": 150155,
+        "median_seconds": 0.04989608500000031,
+        "min_seconds": 0.046585160000176984,
+        "max_seconds": 0.053056110999023076,
+        "median_python_traced_peak_bytes": 149992,
         "samples": [
           {
-            "seconds": 0.05138880100003007,
-            "python_traced_peak_bytes": 151191,
+            "seconds": 0.046585160000176984,
+            "python_traced_peak_bytes": 150170,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           },
           {
-            "seconds": 0.050210060999233974,
-            "python_traced_peak_bytes": 149329,
+            "seconds": 0.04989608500000031,
+            "python_traced_peak_bytes": 148875,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           },
           {
-            "seconds": 0.04838007299986202,
-            "python_traced_peak_bytes": 151020,
+            "seconds": 0.04778573899966432,
+            "python_traced_peak_bytes": 151751,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           },
           {
-            "seconds": 0.04784080699937476,
-            "python_traced_peak_bytes": 150155,
+            "seconds": 0.050676316999670235,
+            "python_traced_peak_bytes": 149992,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           },
           {
-            "seconds": 0.04805524099992908,
-            "python_traced_peak_bytes": 148157,
+            "seconds": 0.053056110999023076,
+            "python_traced_peak_bytes": 148420,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           }
         ],
-        "seconds": 0.04805524099992908,
-        "python_traced_peak_bytes": 148157,
+        "seconds": 0.053056110999023076,
+        "python_traced_peak_bytes": 148420,
         "pages": 100,
         "characters": 10599,
-        "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+        "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+        "page_markers": 100
       },
       "iragi_extract_text": {
-        "median_seconds": 0.05491552399962529,
-        "min_seconds": 0.05417084100008651,
-        "max_seconds": 0.05651908399977401,
-        "median_python_traced_peak_bytes": 183858,
+        "median_seconds": 2.1856314569995448,
+        "min_seconds": 2.1261508379993757,
+        "max_seconds": 2.2598129459984193,
+        "median_python_traced_peak_bytes": 15557176,
         "samples": [
           {
-            "seconds": 0.05556972599970322,
-            "python_traced_peak_bytes": 183858,
+            "seconds": 2.2598129459984193,
+            "python_traced_peak_bytes": 15555729,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           },
           {
-            "seconds": 0.05434721300025558,
-            "python_traced_peak_bytes": 181751,
+            "seconds": 2.1856314569995448,
+            "python_traced_peak_bytes": 15559729,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           },
           {
-            "seconds": 0.05491552399962529,
-            "python_traced_peak_bytes": 181698,
+            "seconds": 2.1622412220003753,
+            "python_traced_peak_bytes": 15557271,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           },
           {
-            "seconds": 0.05417084100008651,
-            "python_traced_peak_bytes": 183986,
+            "seconds": 2.1261508379993757,
+            "python_traced_peak_bytes": 15557176,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           },
           {
-            "seconds": 0.05651908399977401,
-            "python_traced_peak_bytes": 183982,
+            "seconds": 2.2147161810007674,
+            "python_traced_peak_bytes": 15556874,
             "pages": 100,
             "characters": 10599,
-            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
           }
         ],
-        "seconds": 0.05651908399977401,
-        "python_traced_peak_bytes": 183982,
+        "seconds": 2.2147161810007674,
+        "python_traced_peak_bytes": 15556874,
         "pages": 100,
         "characters": 10599,
-        "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+        "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+        "page_markers": 100
+      },
+      "iragi_page_stream": {
+        "median_seconds": 2.2199069029993552,
+        "min_seconds": 2.2031839939991187,
+        "max_seconds": 2.3119377470011386,
+        "median_python_traced_peak_bytes": 15558535,
+        "samples": [
+          {
+            "seconds": 2.3119377470011386,
+            "python_traced_peak_bytes": 15559249,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
+          },
+          {
+            "seconds": 2.2194829389991355,
+            "python_traced_peak_bytes": 15547648,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
+          },
+          {
+            "seconds": 2.238551077000011,
+            "python_traced_peak_bytes": 15559144,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
+          },
+          {
+            "seconds": 2.2199069029993552,
+            "python_traced_peak_bytes": 15556957,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
+          },
+          {
+            "seconds": 2.2031839939991187,
+            "python_traced_peak_bytes": 15558535,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+            "page_markers": 100
+          }
+        ],
+        "seconds": 2.2031839939991187,
+        "python_traced_peak_bytes": 15558535,
+        "pages": 100,
+        "characters": 10599,
+        "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd",
+        "page_markers": 100
       }
     }
+  },
+  "ground_truth": {
+    "definition": "Exact output assertions against synthetic fixtures with known counts and expected extracted text markers.",
+    "limitation": "This score is not general accuracy, a real-world anomaly recall measure, or validation of Iragi's subjective quality score.",
+    "score_percent": 100.0,
+    "passed_checks": 28,
+    "total_checks": 28,
+    "workloads": {
+      "CSV classic": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "row count",
+            "expected": 100000,
+            "observed": 100000,
+            "passed": true
+          },
+          {
+            "check": "duplicate rows",
+            "expected": 10000,
+            "observed": 10000,
+            "passed": true
+          }
+        ]
+      },
+      "CSV stream": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "row count",
+            "expected": 100000,
+            "observed": 100000,
+            "passed": true
+          },
+          {
+            "check": "duplicate rows",
+            "expected": 10000,
+            "observed": 10000,
+            "passed": true
+          }
+        ]
+      },
+      "CSV parser": {
+        "score_percent": 100.0,
+        "passed_checks": 1,
+        "total_checks": 1,
+        "checks": [
+          {
+            "check": "row count",
+            "expected": 100000,
+            "observed": 100000,
+            "passed": true
+          }
+        ]
+      },
+      "JSONL parser": {
+        "score_percent": 100.0,
+        "passed_checks": 1,
+        "total_checks": 1,
+        "checks": [
+          {
+            "check": "row count",
+            "expected": 100000,
+            "observed": 100000,
+            "passed": true
+          }
+        ]
+      },
+      "JSONL stream": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "row count",
+            "expected": 100000,
+            "observed": 100000,
+            "passed": true
+          },
+          {
+            "check": "duplicate rows",
+            "expected": 10000,
+            "observed": 10000,
+            "passed": true
+          }
+        ]
+      },
+      "Excel classic": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "row count",
+            "expected": 25000,
+            "observed": 25000,
+            "passed": true
+          },
+          {
+            "check": "duplicate rows",
+            "expected": 2500,
+            "observed": 2500,
+            "passed": true
+          }
+        ]
+      },
+      "Excel stream": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "row count",
+            "expected": 25000,
+            "observed": 25000,
+            "passed": true
+          },
+          {
+            "check": "duplicate rows",
+            "expected": 2500,
+            "observed": 2500,
+            "passed": true
+          }
+        ]
+      },
+      "Contract validation": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "positive-rule failed rows",
+            "expected": 10,
+            "observed": 10,
+            "passed": true
+          },
+          {
+            "check": "range-rule failed rows",
+            "expected": 10,
+            "observed": 10,
+            "passed": true
+          }
+        ]
+      },
+      "Auto-clean + DLQ": {
+        "score_percent": 100.0,
+        "passed_checks": 3,
+        "total_checks": 3,
+        "checks": [
+          {
+            "check": "duplicates removed",
+            "expected": 10000,
+            "observed": 10000,
+            "passed": true
+          },
+          {
+            "check": "quarantined invalid rows",
+            "expected": 9,
+            "observed": 9,
+            "passed": true
+          },
+          {
+            "check": "clean row count",
+            "expected": 89991,
+            "observed": 89991,
+            "passed": true
+          }
+        ]
+      },
+      "Reconciliation": {
+        "score_percent": 100.0,
+        "passed_checks": 4,
+        "total_checks": 4,
+        "checks": [
+          {
+            "check": "matched keys",
+            "expected": 5000,
+            "observed": 5000,
+            "passed": true
+          },
+          {
+            "check": "source A orphans",
+            "expected": 5000,
+            "observed": 5000,
+            "passed": true
+          },
+          {
+            "check": "source B orphans",
+            "expected": 5000,
+            "observed": 5000,
+            "passed": true
+          },
+          {
+            "check": "amount conflicts",
+            "expected": 500,
+            "observed": 500,
+            "passed": true
+          }
+        ]
+      },
+      "PDF PyMuPDF": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "page count",
+            "expected": 100,
+            "observed": 100,
+            "passed": true
+          },
+          {
+            "check": "fixture text markers",
+            "expected": 100,
+            "observed": 100,
+            "passed": true
+          }
+        ]
+      },
+      "PDF Iragi extraction": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "page count",
+            "expected": 100,
+            "observed": 100,
+            "passed": true
+          },
+          {
+            "check": "fixture text markers",
+            "expected": 100,
+            "observed": 100,
+            "passed": true
+          }
+        ]
+      },
+      "PDF Iragi page stream": {
+        "score_percent": 100.0,
+        "passed_checks": 2,
+        "total_checks": 2,
+        "checks": [
+          {
+            "check": "page count",
+            "expected": 100,
+            "observed": 100,
+            "passed": true
+          },
+          {
+            "check": "fixture text markers",
+            "expected": 100,
+            "observed": 100,
+            "passed": true
+          }
+        ]
+      },
+      "PDF text parity": {
+        "score_percent": 100.0,
+        "passed_checks": 1,
+        "total_checks": 1,
+        "checks": [
+          {
+            "check": "normalized text hashes agree",
+            "expected": true,
+            "observed": true,
+            "passed": true
+          }
+        ]
+      }
+    },
+    "competitor_frameworks_scored": []
   }
 }

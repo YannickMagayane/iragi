@@ -291,9 +291,11 @@ def read_excel_file(
             finally:
                 wb.close()
 
-        excel_file = pd.ExcelFile(path)
-        all_sheets = excel_file.sheet_names
-        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+        # Explicitly close the workbook after parsing. On Windows, openpyxl may
+        # otherwise keep the file handle alive and prevent callers deleting it.
+        with pd.ExcelFile(path) as excel_file:
+            all_sheets = excel_file.sheet_names
+            df = pd.read_excel(excel_file, sheet_name=sheet_name)
         if sanitize_formulas:
             df = _sanitize_formulas(df)
         df.attrs["sheet_names"] = all_sheets

@@ -41,7 +41,7 @@ jobs:
           mkdir -p docs/source/benchmarks
           cp README.md docs/source/readme.md
           [ -f README.fr.md ] && cp README.fr.md docs/source/readme_fr.md
-          cp benchmarks/benchmark.svg docs/source/benchmarks/benchmark.svg
+          cp benchmarks/*.svg docs/source/benchmarks/
           sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi
           sphinx-build -b html docs/source docs/build/html
 

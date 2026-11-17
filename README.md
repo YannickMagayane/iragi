@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Inspect. Extract. Analyze.</strong><br>
-  <em>Modular Python toolkit for high-performance data quality inspection and document extraction.</em>
+  <em>Modular Python toolkit for data quality inspection and document extraction.</em>
 </p>
 
 <p align="center">
@@ -54,6 +54,7 @@ Engineered for seamless integration into standalone Python scripts, Django appli
 - [Command Line Interface (CLI)](#command-line-interface-cli)
 - [Technology Foundation & Potential](#technology-foundation--potential)
 - [Benchmarks](#benchmarks)
+- [Project Architecture](#project-architecture)
 - [Changelog](#changelog)
 - [Contributing](#contributing)
 - [License](#license)
@@ -95,7 +96,7 @@ High-throughput text and table extraction from digital or scanned PDF files:
 - **Metadata parsing:** Title, author, creation dates, page counts, and security flags.
 - **Table reconstruction:** Integration with `pdfplumber` to transform document tables into Pandas DataFrames.
 - **Scanned page detection:** Predictive heuristic rules detecting when OCR (Tesseract / Pillow) is required.
-- **Memory-bounded PDF Streaming (`iter_pdf_pages`, `extract_tables_stream`):** Page-by-page generator processing preventing memory exhaustion on 1,000+ page documents.
+- **Page-wise PDF iteration (`iter_pdf_pages`, `extract_tables_stream`):** Exposes pages incrementally; downstream storage and extraction choices still affect memory use.
 
 ### 3. `iragi.reconcile` — Cross-Source Data Reconciliation
 
@@ -232,7 +233,7 @@ for r in results:
 ```python
 from iragi.scan import read_csv_chunked
 
-# Process a large CSV without memory overflow
+# Process a large CSV in chunks (duplicate hashes still use memory)
 df = read_csv_chunked("transactions_2026.csv", chunksize=100_000)
 
 print(f"Total rows loaded: {len(df)}")
@@ -347,7 +348,7 @@ from iragi.pdf import iter_pdf_pages, extract_tables_stream
 res_csv = scan_csv_stream("large_data.csv", chunksize=50_000)
 print(f"CSV score: {res_csv.quality_score.total_score:.1f}/100")
 
-# 2. Stream massive multi-sheet Excel (300 MB+) without memory spikes
+# 2. Process a large multi-sheet Excel workbook in chunks
 res_excel = scan_excel_stream("large_workbook.xlsx", sheet_name="01_Ventes", chunksize=25_000)
 print(f"Excel score: {res_excel.quality_score.total_score:.1f}/100")
 
@@ -416,8 +417,7 @@ iragi all https://www.insee.fr/en/statistiques/fichier/emploi_2026.xlsx
 ## Remote and Cloud File Ingestion
 
 Iragi accepts HTTP or HTTPS URLs wherever a local file path is expected. Remote requests reject private and non-routable IP addresses, follow at most five validated redirects, and can be restricted with `allowed_hosts`.
-No configuration is needed. Files are fetched transparently, inspected in memory, and the
-temporary copy is deleted automatically.
+No configuration is needed for the high-level API. Files are downloaded to a temporary copy for inspection and removed by the high-level scan/analyze flows. Callers using the lower-level fetch API manage the returned temporary path.
 
 ### Supported sources
 
@@ -453,27 +453,27 @@ for r in results:
     print(f"{r.file_path}: {r.overall_quality_score}/100")
 ```
 
-### Safety guarantees
+### Remote input limits and cleanup
 
 | Protection | Default value |
 |---|---|
 | Maximum file size | 500 MB |
 | Network timeout | 30 seconds |
-| Temporary file cleanup | Automatic (always) |
+| Redirect limit | 5 validated redirects |
+| Temporary file cleanup | Removed by high-level scan/analyze flows; direct fetch callers own the returned path |
 
-> **Note:** S3 and GCS private buckets require presigned URLs. Iragi fetches any HTTPS URL,
-> so presigned URLs work out of the box without additional configuration or AWS/GCP credentials.
+Private S3 and GCS objects require presigned URLs. Host validation reduces access to local and private network addresses, but it is not a substitute for deployment-level egress controls. The 500 MB limit is configurable through the lower-level fetch API; callers of that API must remove the returned temporary file.
 
 ---
 
 ## Technology Foundation & Potential
 
 Iragi uses a Python stack that includes:
-- **High-Performance Core:** Python 3.10+, Pandas 2+, and NumPy.
-- **Universal Extraction:** PyMuPDF, pdfplumber, Tesseract / Pillow.
+- **Tabular processing:** Python 3.10+, Pandas 2+, and NumPy.
+- **Document extraction:** PyMuPDF, pdfplumber, Tesseract / Pillow.
 - **Developer Experience:** Typer, Rich terminal diagnostics.
 - **Reporting Engine:** Jinja2 templating for JSON and HTML reporting.
-- **Quality Checks:** GitHub Actions tests Python 3.10–3.13 on Linux and Windows with pandas 2.x/3.x; coverage is uploaded to Codecov.
+- **Quality checks:** GitHub Actions tests Python 3.10–3.13 on Linux and Windows with pandas 2.x/3.x. Coverage upload runs only when `CODECOV_TOKEN` is configured.
 
 ### Ready for Strategic Integration
 - **ETL & Data Warehousing:** Automated schema validation and hygiene checks before loading into Lakehouses.
@@ -484,13 +484,32 @@ Iragi uses a Python stack that includes:
 
 ## Benchmarks
 
-The reproducible suite creates a 100,000-row CSV fixture with 10% duplicate rows and a 100-page PDF fixture. It runs one warm-up and five timed samples per mode in independent processes, then reports medians, ranges, and raw samples. The CSV comparison includes parser-only `pandas.read_csv`, full classic Iragi scan, and chunked Iragi scan; the PDF comparison checks normalized text equality between PyMuPDF and Iragi extraction. Parser-only and full-scan timings are different workloads, so use them as context rather than a direct speed contest.
+The reproducible suite covers more than file scans: 100,000-row CSV and JSON Lines fixtures, a 25,000-row Excel workbook, 100-page PDF extraction and iteration, contract validation, auto-clean with DLQ quarantine, and two-source reconciliation. It runs one warm-up and five timed samples per mode in separate processes, then records medians, ranges, raw samples, duplicate counts, and Python-traced peak allocation. Inputs shared with an operation are loaded before timing; the JSON records the exact fixture sizes and environment.
 
 ![Benchmark comparison chart](benchmarks/benchmark.svg)
 
-The current benchmark results (in [`benchmarks/results.json`](https://github.com/YannickMagayane/iragi/blob/main/benchmarks/results.json)) describe the machine recorded in the JSON. On the checked-in fixture, chunked scan counted all 10,000 duplicates but took about 3.7× as long as classic scan and used about 52% more Python-traced peak allocation because duplicate counting retains row hashes. Memory excludes native pandas/NumPy allocations and is not total process RAM. Timings depend on the hardware and fixture.
+![Iragi and related tools feature matrix](benchmarks/capabilities_en.svg)
 
-Run it with `python bench_suite.py --rows 100000 --chunksize 10000 --repeat 5 --output benchmarks/results.json --chart benchmarks/benchmark.svg`. Useful project checks are `python -m pytest`, `bin/docs`, `python -m build`, and `python -m twine check dist/*`.
+![Known-answer correctness checks](benchmarks/accuracy.svg)
+
+The fixture-based exactness score is **100% (28/28 seeded checks)** in the published run. It checks expected row and duplicate counts, contract failures, quarantine counts, reconciliation outcomes, PDF page markers, and normalized text parity. This is a narrow correctness check on synthetic data, not a general accuracy claim, anomaly-recall estimate, or proof that Iragi's weighted quality score is valid. Competitor tools were not installed or run, so they have no runtime or exactness score here.
+
+| Capability | Iragi | Great Expectations | Pandera | ydata-profiling | Soda Core |
+| --- | --- | --- | --- | --- | --- |
+| Profiling | Yes | Partial | No | Yes | Partial |
+| Contracts / rules | Yes | Yes | Yes | Partial | Yes |
+| PDF extraction | Yes | No | No | No | No |
+| Reconciliation | Yes | Partial (custom) | Partial (custom) | No | Partial (reference checks) |
+| Auto-clean + DLQ | Yes | No | No | No | No |
+| Large-file streaming | Yes | Partial (batches / Spark) | Partial (chunk-by-chunk) | Partial (sampling / Spark) | Partial (source-dependent) |
+
+“Partial” means the capability needs custom code, batching, sampling, or a supported external data source; this is a feature comparison, not a test of equivalent performance. Great Expectations' batch and Spark workflows, Pandera's DataFrame schema validation, ydata-profiling's large-data guidance, and Soda's data-source checks are described in their [official docs](https://docs.greatexpectations.io/docs/core/introduction/gx_overview/), [Pandera docs](https://pandera.readthedocs.io/en/stable/), [YData large-data guide](https://docs.profiling.ydata.ai/latest/features/big_data/), and [Soda Core docs](https://docs.soda.io/soda-documentation/soda-v3/overview-main). The actual benchmark timings are Iragi and baseline parser measurements; the optional competitor packages were not installed for this run. Soda's in-memory DataFrame integration requires an adapter and Soda Cloud configuration.
+
+The [raw results](https://github.com/YannickMagayane/iragi/blob/main/benchmarks/results.json) describe the recorded machine. Python-traced allocation excludes native pandas/NumPy allocations and is not total process RAM; timings depend on hardware and fixture.
+
+On this recorded machine and fixture, Iragi's measured advantage is functional breadth in one package (profiling, contracts, PDF extraction, reconciliation, and cleaning with quarantine). The runtime measurements do **not** show a general speed win: CSV scans take longer than parser-only pandas because they also profile, score, and count duplicates; PDF extraction is about 45× slower than direct PyMuPDF text extraction. JSON Lines streaming uses about 81% less Python-traced peak allocation than pandas' full JSONL parse while taking about 21% longer, and Excel streaming is about 7% faster than Iragi's full Excel scan in this run. These comparisons do different work or cover one machine and fixture; they are not universal performance guarantees.
+
+Run it with `python bench_suite.py --rows 100000 --excel-rows 25000 --reconcile-rows 10000 --chunksize 10000 --repeat 5`. It writes JSON results, workload and exactness charts, and English/French capability charts under `benchmarks/`. CI runs pytest; `bin/docs`, `python -m build`, and `python -m twine check dist/*` build the docs and distribution artifacts locally.
 
 ## Changelog
 

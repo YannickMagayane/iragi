@@ -1,46 +1,118 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="645" viewBox="0 0 960 645" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1547" viewBox="0 0 960 1547" role="img" aria-labelledby="title desc">
 <title id="title">Iragi benchmark comparison</title>
-<desc id="desc">Median CSV and PDF elapsed time and Python-traced memory for the recorded benchmark fixture.</desc>
+<desc id="desc">Median runtimes for Iragi profiling, contracts, cleaning, reconciliation, PDF extraction and large-file streaming workloads.</desc>
 <rect width="100%" height="100%" fill="#f8fafc"/>
 <style>text{font-family:Arial,sans-serif;fill:#172033}.title{font-size:24px;font-weight:700}.subtitle{font-size:13px;fill:#475569}.heading{font-size:16px;font-weight:700}.note{font-size:11px;fill:#475569}.label{font-size:12px}.value{font-size:12px;font-weight:700}.track{fill:#e2e8f0}.bar0{fill:#64748b}.bar1{fill:#2563eb}.bar2{fill:#0f766e}</style>
-<text x="32" y="38" class="title">Iragi 0.6.3 benchmark comparison</text>
+<text x="32" y="38" class="title">Iragi 0.6.4 benchmark</text>
 <text x="32" y="61" class="subtitle">5 independent timed processes per mode; median shown · one warm-up per mode</text>
-<text x="32" y="100" class="heading">CSV elapsed time · seconds · lower is faster</text>
-<text x="32" y="119" class="note">Pandas read_csv parses only; Iragi modes also profile and score.</text>
-<text x="40" y="158" class="label">Pandas parse only</text>
-<rect x="280" y="145" width="500" height="17" rx="4" class="track"/>
-<rect x="280" y="145" width="40.1" height="17" rx="4" class="bar0"/>
-<text x="792" y="158" class="value">0.029 s</text>
-<text x="40" y="187" class="label">Iragi classic scan</text>
-<rect x="280" y="174" width="500" height="17" rx="4" class="track"/>
-<rect x="280" y="174" width="137.1" height="17" rx="4" class="bar1"/>
-<text x="792" y="187" class="value">0.101 s</text>
-<text x="40" y="216" class="label">Iragi chunked scan</text>
-<rect x="280" y="203" width="500" height="17" rx="4" class="track"/>
-<rect x="280" y="203" width="500.0" height="17" rx="4" class="bar2"/>
-<text x="792" y="216" class="value">0.368 s</text>
-<text x="32" y="270" class="heading">CSV Python-traced peak allocation · MiB · lower is less</text>
-<text x="32" y="289" class="note">Excludes native allocations; stream retains row hashes for duplicate counts.</text>
-<text x="40" y="328" class="label">Pandas parse only</text>
-<rect x="280" y="315" width="500" height="17" rx="4" class="track"/>
-<rect x="280" y="315" width="95.8" height="17" rx="4" class="bar0"/>
-<text x="792" y="328" class="value">2.005 MiB</text>
-<text x="40" y="357" class="label">Iragi classic scan</text>
-<rect x="280" y="344" width="500" height="17" rx="4" class="track"/>
-<rect x="280" y="344" width="329.4" height="17" rx="4" class="bar1"/>
-<text x="792" y="357" class="value">6.895 MiB</text>
-<text x="40" y="386" class="label">Iragi chunked scan</text>
-<rect x="280" y="373" width="500" height="17" rx="4" class="track"/>
-<rect x="280" y="373" width="500.0" height="17" rx="4" class="bar2"/>
-<text x="792" y="386" class="value">10.465 MiB</text>
-<text x="32" y="440" class="heading">PDF elapsed time · seconds · lower is faster</text>
-<text x="32" y="459" class="note">100-page fixture; normalized text SHA-256 is checked for equality.</text>
-<text x="40" y="498" class="label">PyMuPDF text only</text>
-<rect x="280" y="485" width="500" height="17" rx="4" class="track"/>
-<rect x="280" y="485" width="440.5" height="17" rx="4" class="bar0"/>
-<text x="792" y="498" class="value">0.048 s</text>
-<text x="40" y="527" class="label">Iragi extract (tables off)</text>
-<rect x="280" y="514" width="500" height="17" rx="4" class="track"/>
-<rect x="280" y="514" width="500.0" height="17" rx="4" class="bar1"/>
-<text x="792" y="527" class="value">0.055 s</text>
+<text x="32" y="92" class="heading">CSV elapsed time · seconds · lower is faster</text>
+<text x="32" y="111" class="note">Pandas read_csv parses only; Iragi modes also profile and score.</text>
+<text x="40" y="150" class="label">Pandas parse only</text>
+<rect x="320" y="137" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="137" width="36.4" height="17" rx="4" class="bar0"/>
+<text x="787" y="150" class="value">0.032 s</text>
+<text x="40" y="179" class="label">Iragi classic scan</text>
+<rect x="320" y="166" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="166" width="119.2" height="17" rx="4" class="bar1"/>
+<text x="787" y="179" class="value">0.105 s</text>
+<text x="40" y="208" class="label">Iragi chunked scan</text>
+<rect x="320" y="195" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="195" width="455.0" height="17" rx="4" class="bar2"/>
+<text x="787" y="208" class="value">0.403 s</text>
+<text x="32" y="250" class="heading">CSV Python-traced peak allocation · MiB · lower is less</text>
+<text x="32" y="269" class="note">Excludes native allocations; stream retains row hashes for duplicate counts.</text>
+<text x="40" y="308" class="label">Pandas parse only</text>
+<rect x="320" y="295" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="295" width="86.8" height="17" rx="4" class="bar0"/>
+<text x="787" y="308" class="value">1.996 MiB</text>
+<text x="40" y="337" class="label">Iragi classic scan</text>
+<rect x="320" y="324" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="324" width="299.8" height="17" rx="4" class="bar1"/>
+<text x="787" y="337" class="value">6.894 MiB</text>
+<text x="40" y="366" class="label">Iragi chunked scan</text>
+<rect x="320" y="353" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="353" width="455.0" height="17" rx="4" class="bar2"/>
+<text x="787" y="366" class="value">10.463 MiB</text>
+<text x="32" y="408" class="heading">JSON Lines · elapsed time</text>
+<text x="32" y="427" class="note">Pandas parses only; Iragi also profiles and scores.</text>
+<text x="40" y="466" class="label">Pandas read_json (parse only)</text>
+<rect x="320" y="453" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="453" width="384.3" height="17" rx="4" class="bar0"/>
+<text x="787" y="466" class="value">1.447 s</text>
+<text x="40" y="495" class="label">Iragi JSONL stream scan</text>
+<rect x="320" y="482" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="482" width="455.0" height="17" rx="4" class="bar1"/>
+<text x="787" y="495" class="value">1.713 s</text>
+<text x="32" y="566" class="heading">JSON Lines · Python-traced peak allocation · MiB</text>
+<text x="32" y="585" class="note">Excludes native allocations; this is not total process RAM.</text>
+<text x="40" y="624" class="label">Pandas read_json (parse only)</text>
+<rect x="320" y="611" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="611" width="455.0" height="17" rx="4" class="bar0"/>
+<text x="787" y="624" class="value">83.524 MiB</text>
+<text x="40" y="653" class="label">Iragi JSONL stream scan</text>
+<rect x="320" y="640" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="640" width="86.5" height="17" rx="4" class="bar1"/>
+<text x="787" y="653" class="value">15.882 MiB</text>
+<text x="32" y="724" class="heading">Excel · elapsed time</text>
+<text x="32" y="743" class="note">Same 25,000-row workbook; both modes run Iragi profiling.</text>
+<text x="40" y="782" class="label">Iragi full Excel scan</text>
+<rect x="320" y="769" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="769" width="455.0" height="17" rx="4" class="bar0"/>
+<text x="787" y="782" class="value">4.149 s</text>
+<text x="40" y="811" class="label">Iragi chunked Excel scan</text>
+<rect x="320" y="798" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="798" width="445.2" height="17" rx="4" class="bar1"/>
+<text x="787" y="811" class="value">4.060 s</text>
+<text x="32" y="882" class="heading">Excel · Python-traced peak allocation · MiB</text>
+<text x="32" y="901" class="note">Excludes native allocations; this is not total process RAM.</text>
+<text x="40" y="940" class="label">Iragi full Excel scan</text>
+<rect x="320" y="927" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="927" width="455.0" height="17" rx="4" class="bar0"/>
+<text x="787" y="940" class="value">14.574 MiB</text>
+<text x="40" y="969" class="label">Iragi chunked Excel scan</text>
+<rect x="320" y="956" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="956" width="423.4" height="17" rx="4" class="bar1"/>
+<text x="787" y="969" class="value">13.562 MiB</text>
+<text x="32" y="1040" class="heading">PDF · elapsed time</text>
+<text x="32" y="1059" class="note">100-page synthetic PDF; streaming page iterator avoids retaining all page models.</text>
+<text x="40" y="1098" class="label">PyMuPDF text only</text>
+<rect x="320" y="1085" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1085" width="10.2" height="17" rx="4" class="bar0"/>
+<text x="787" y="1098" class="value">0.050 s</text>
+<text x="40" y="1127" class="label">Iragi full extraction</text>
+<rect x="320" y="1114" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1114" width="448.0" height="17" rx="4" class="bar1"/>
+<text x="787" y="1127" class="value">2.186 s</text>
+<text x="40" y="1156" class="label">Iragi page iterator</text>
+<rect x="320" y="1143" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1143" width="455.0" height="17" rx="4" class="bar2"/>
+<text x="787" y="1156" class="value">2.220 s</text>
+<text x="32" y="1198" class="heading">PDF · Python-traced peak allocation · MiB</text>
+<text x="32" y="1217" class="note">Excludes native allocations; this is not total process RAM.</text>
+<text x="40" y="1256" class="label">PyMuPDF text only</text>
+<rect x="320" y="1243" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1243" width="4.4" height="17" rx="4" class="bar0"/>
+<text x="787" y="1256" class="value">0.143 MiB</text>
+<text x="40" y="1285" class="label">Iragi full extraction</text>
+<rect x="320" y="1272" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1272" width="455.0" height="17" rx="4" class="bar1"/>
+<text x="787" y="1285" class="value">14.836 MiB</text>
+<text x="40" y="1314" class="label">Iragi page iterator</text>
+<rect x="320" y="1301" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1301" width="455.0" height="17" rx="4" class="bar2"/>
+<text x="787" y="1314" class="value">14.838 MiB</text>
+<text x="32" y="1356" class="heading">Other Iragi operations · elapsed time</text>
+<text x="32" y="1375" class="note">Separate workloads; these bars show their measured cost, not a cross-operation ranking.</text>
+<text x="40" y="1414" class="label">Contract rule validation</text>
+<rect x="320" y="1401" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1401" width="6.7" height="17" rx="4" class="bar0"/>
+<text x="787" y="1414" class="value">0.004 s</text>
+<text x="40" y="1443" class="label">Auto-clean + DLQ quarantine</text>
+<rect x="320" y="1430" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1430" width="455.0" height="17" rx="4" class="bar1"/>
+<text x="787" y="1443" class="value">0.285 s</text>
+<text x="40" y="1472" class="label">Two-source reconciliation</text>
+<rect x="320" y="1459" width="455" height="17" rx="4" class="track"/>
+<rect x="320" y="1459" width="360.6" height="17" rx="4" class="bar2"/>
+<text x="787" y="1472" class="value">0.226 s</text>
 </svg>

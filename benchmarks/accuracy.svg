@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="608" viewBox="0 0 960 608" role="img" aria-labelledby="title desc">
+<title id="title">Ground-truth benchmark score</title>
+<desc id="desc">Exact-match scores against counts and text markers seeded into synthetic benchmark fixtures.</desc>
+<rect width="100%" height="100%" fill="#f8fafc"/>
+<style>text{font-family:Arial,sans-serif;fill:#172033}.title{font-size:23px;font-weight:700}.note{font-size:12px;fill:#475569}.label{font-size:12px}.value{font-size:12px;font-weight:700}.track{fill:#e2e8f0}.bar{fill:#0f766e}</style>
+<text x="28" y="36" class="title">Known-answer correctness checks</text>
+<text x="28" y="59" class="note">Overall: 100.0% · 28/28 exact checks passed</text>
+<text x="28" y="78" class="note">Synthetic fixtures only; this is not a general accuracy or real-world anomaly recall guarantee.</text>
+<text x="28" y="110" class="label">CSV classic</text>
+<rect x="300" y="96" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="96" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="110" class="value">100.0% (2/2)</text>
+<text x="28" y="140" class="label">CSV stream</text>
+<rect x="300" y="126" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="126" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="140" class="value">100.0% (2/2)</text>
+<text x="28" y="170" class="label">CSV parser</text>
+<rect x="300" y="156" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="156" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="170" class="value">100.0% (1/1)</text>
+<text x="28" y="200" class="label">JSONL parser</text>
+<rect x="300" y="186" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="186" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="200" class="value">100.0% (1/1)</text>
+<text x="28" y="230" class="label">JSONL stream</text>
+<rect x="300" y="216" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="216" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="230" class="value">100.0% (2/2)</text>
+<text x="28" y="260" class="label">Excel classic</text>
+<rect x="300" y="246" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="246" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="260" class="value">100.0% (2/2)</text>
+<text x="28" y="290" class="label">Excel stream</text>
+<rect x="300" y="276" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="276" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="290" class="value">100.0% (2/2)</text>
+<text x="28" y="320" class="label">Contract validation</text>
+<rect x="300" y="306" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="306" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="320" class="value">100.0% (2/2)</text>
+<text x="28" y="350" class="label">Auto-clean + DLQ</text>
+<rect x="300" y="336" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="336" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="350" class="value">100.0% (3/3)</text>
+<text x="28" y="380" class="label">Reconciliation</text>
+<rect x="300" y="366" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="366" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="380" class="value">100.0% (4/4)</text>
+<text x="28" y="410" class="label">PDF PyMuPDF</text>
+<rect x="300" y="396" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="396" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="410" class="value">100.0% (2/2)</text>
+<text x="28" y="440" class="label">PDF Iragi extraction</text>
+<rect x="300" y="426" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="426" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="440" class="value">100.0% (2/2)</text>
+<text x="28" y="470" class="label">PDF Iragi page stream</text>
+<rect x="300" y="456" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="456" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="470" class="value">100.0% (2/2)</text>
+<text x="28" y="500" class="label">PDF text parity</text>
+<rect x="300" y="486" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="486" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="500" class="value">100.0% (1/1)</text>
+<text x="28" y="530" class="label">Overall</text>
+<rect x="300" y="516" width="500" height="18" rx="4" class="track"/>
+<rect x="300" y="516" width="500.0" height="18" rx="4" class="bar"/>
+<text x="812" y="530" class="value">100.0% (28/28)</text>
+</svg>

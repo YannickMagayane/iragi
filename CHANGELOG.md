@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.4 — Benchmark and workflow update (2026-11-17)
+
+- Expand the reproducible benchmark to cover CSV, JSON Lines, Excel and PDF workloads, contract validation, auto-clean with DLQ quarantine, and two-source reconciliation.
+- Add English and French feature-matrix graphics comparing Iragi with Great Expectations, Pandera, ydata-profiling and Soda Core.
+- Close pandas Excel workbooks after reads so temporary workbooks can be removed on Windows.
+- Skip Codecov upload when `CODECOV_TOKEN` is not configured, while keeping test execution independent of that optional secret.
+
 ## 0.6.3 — Release candidate (2026-11-17)
 
 - Make `iragi.scan` callable as a module so `import iragi.scan.engine as engine` works.

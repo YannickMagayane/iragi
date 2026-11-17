@@ -113,6 +113,7 @@ Le moteur PDF se concentre sur l'extraction, la structuration et la numérisatio
 - **Détection des pages scannées :** identification automatique des pages nécessitant une reconnaissance optique.
 - **OCR facultatif :** reconnaissance optique de caractères pour documents numérisés via Tesseract.
 - **Exports multi-formats :** exports directs en JSON, CSV, Excel ou Markdown.
+- **Parcours par page (`iter_pdf_pages`, `extract_tables_stream`) :** accès incrémental aux pages ; la mémoire réellement utilisée dépend aussi de l'extraction et du traitement en aval.
 
 ### 3. `iragi.reconcile` — Réconciliation et rapprochement inter-sources
 
@@ -408,7 +409,7 @@ iragi all document.pdf --report html --output ./reports/audit.html
 
 Iragi accepte les URL HTTP ou HTTPS partout où un chemin de fichier local est attendu. Les requêtes distantes refusent les adresses IP privées ou non routables, suivent au plus cinq redirections validées et peuvent être restreintes avec `allowed_hosts`.
 Aucune configuration n'est necessaire. Les fichiers sont telecharges de maniere transparente, analyses en memoire,
-et la copie temporaire est supprimee automatiquement.
+et une copie temporaire est utilisée pour l'analyse. Les parcours de haut niveau la suppriment après traitement ; si un téléchargement est fait via l'API de bas niveau, l'appelant gère le fichier retourné.
 
 ### Sources prises en charge
 
@@ -444,16 +445,16 @@ for r in results:
     print(f"{r.file_path} : {r.overall_quality_score}/100")
 ```
 
-### Garanties de securite
+### Limites des entrées distantes et nettoyage
 
 | Protection | Valeur par defaut |
 |---|---|
-| Taille maximale du fichier | 500 Mo |
+| Taille maximale du fichier | 500 Mo (configurable via l'API de téléchargement bas niveau) |
 | Timeout reseau | 30 secondes |
-| Nettoyage du fichier temporaire | Automatique (toujours) |
+| Nombre maximal de redirections | 5, avec validation à chaque étape |
+| Fichier temporaire | Supprimé par les parcours scan/analyze ; l'appelant de `fetch_remote_file` gère le chemin retourné |
 
-> **Note :** Les buckets S3 et GCS prives necessitent des URLs presignees. Iragi telecharge toute URL HTTPS,
-> donc les URLs presignees fonctionnent sans configuration supplementaire ni identifiants AWS/GCP.
+Les objets privés S3 et GCS nécessitent une URL présignée. La validation de l'hôte limite l'accès aux adresses locales et privées, mais ne remplace pas les règles de sortie réseau de l'environnement de déploiement. La limite de 500 Mo se configure via l'API de téléchargement de bas niveau ; son appelant doit supprimer le fichier temporaire retourné.
 
 ---
 
@@ -465,7 +466,7 @@ Iragi permet d'exporter les résultats dans différents formats pour convenir à
 - **HTML :** Rapports interactifs lisibles dans un navigateur, avec graphiques et tableaux clairs.
 - **CSV / Excel :** Export direct des données extraites ou nettoyées.
 
-Chaque rapport garantit une traçabilité rigoureuse : empreinte du fichier source, date et heure d'analyse, paramètres de configuration appliqués et détail des pénalités du score de qualité.
+Les rapports peuvent inclure l'empreinte du fichier source, l'heure d'analyse, les paramètres et les pénalités du score de qualité, selon le format et le parcours utilisés.
 
 ---
 
@@ -491,20 +492,43 @@ La documentation compilée est générée dans `docs/build/html/index.html`.
 
 ## Benchmarks
 
-Le banc d'essai crée un CSV de 100 000 lignes avec 10 % de doublons et un PDF de 100 pages. Chaque mode reçoit un échauffement puis cinq mesures dans des processus séparés. Le rapport conserve les médianes, les plages min/max et toutes les mesures brutes. Le test CSV compare `pandas.read_csv` seul au scan complet classique et au scan par blocs d'Iragi : pandas ne profile ni ne calcule de score, donc ces durées décrivent des charges différentes. Le test PDF compare l'extraction texte de PyMuPDF à celle d'Iragi et vérifie l'égalité du texte après normalisation des espaces.
+Le banc d'essai couvre le scan et plusieurs autres fonctions : CSV et JSON Lines de 100 000 lignes, classeur Excel de 25 000 lignes, extraction et parcours d'un PDF de 100 pages, validation de contrats, auto-nettoyage avec quarantaine DLQ et réconciliation de deux sources. Chaque mode reçoit un échauffement puis cinq mesures dans des processus séparés. Le rapport conserve médianes, plages min/max, mesures brutes, nombres de doublons et allocation maximale suivie par Python. Les entrées partagées par une opération sont chargées avant le chronométrage ; le JSON indique les tailles précises des fixtures et l'environnement.
 
 ![Graphique comparatif du benchmark](benchmarks/benchmark.svg)
 
-Les [résultats détaillés](benchmarks/results.json) décrivent la machine inscrite dans le JSON. Sur cette fixture, le scan par blocs compte les 10 000 doublons, mais prend environ 3,75 fois plus de temps que le scan classique et utilise environ 52 % d'allocation Python suivie supplémentaire, car le comptage conserve les empreintes des lignes. Cette mesure exclut les allocations natives de pandas/NumPy et ne représente pas la RAM totale du processus. Les performances varient selon le matériel et les données.
+![Matrice des fonctionnalités d'Iragi et des outils associés](benchmarks/capabilities_fr.svg)
+
+![Contrôles d'exactitude sur données de référence](benchmarks/accuracy.svg)
+
+Le score d'exactitude sur données synthétiques est de **100 % (28 contrôles sur 28)** pour cette exécution. Il vérifie des nombres de lignes et de doublons attendus, les échecs de règles, la quarantaine, la réconciliation, les marqueurs des pages PDF et l'égalité du texte normalisé. Ce résultat limité à des fixtures connues ne mesure ni l'exactitude générale, ni le rappel d'anomalies en production, ni la validité du score de qualité pondéré d'Iragi. Les autres outils n'ont pas été installés ou exécutés : aucun score d'exactitude ni temps ne leur est attribué.
+
+| Fonctionnalité | Iragi | Great Expectations | Pandera | ydata-profiling | Soda Core |
+| --- | --- | --- | --- | --- | --- |
+| Profilage | Oui | Partiel | Non | Oui | Partiel |
+| Contrats / règles | Oui | Oui | Oui | Partiel | Oui |
+| Extraction PDF | Oui | Non | Non | Non | Non |
+| Réconciliation | Oui | Partiel (personnalisable) | Partiel (personnalisable) | Non | Partiel (références) |
+| Auto-nettoyage + DLQ | Oui | Non | Non | Non | Non |
+| Streaming gros fichiers | Oui | Partiel (lots / Spark) | Partiel (par blocs) | Partiel (échantillonnage / Spark) | Partiel (selon la source) |
+
+« Partiel » signifie que la capacité demande du code personnalisé, un traitement par lots, un échantillonnage ou une source externe prise en charge ; ce tableau ne compare pas des performances équivalentes. Les flux par lots et Spark de Great Expectations, la validation de schémas Pandera, le guide grands volumes de ydata-profiling et les contrôles par source de Soda sont décrits dans leurs documentations [officielles](https://docs.greatexpectations.io/docs/core/introduction/gx_overview/), [Pandera](https://pandera.readthedocs.io/en/stable/), [YData](https://docs.profiling.ydata.ai/latest/features/big_data/) et [Soda Core](https://docs.soda.io/soda-documentation/soda-v3/overview-main). Les durées réellement mesurées ici concernent Iragi et les parseurs de référence ; les paquets concurrents optionnels n'étaient pas installés. Le traitement d'un DataFrame en mémoire avec Soda requiert aussi un adaptateur et une configuration Soda Cloud.
+
+Les [résultats bruts](https://github.com/YannickMagayane/iragi/blob/main/benchmarks/results.json) décrivent la machine consignée. La mesure Python exclut les allocations natives de pandas/NumPy et ne représente pas la mémoire totale du processus. Les durées dépendent du matériel et des données.
+
+Sur cette machine et ces fixtures, l'avantage mesuré d'Iragi est la réunion de plusieurs fonctions dans un même package : profilage, contrats, extraction PDF, réconciliation et nettoyage avec quarantaine. Les mesures ne montrent **pas** de gain général de vitesse : les scans CSV sont plus lents que le parsing seul par pandas, car ils profilent aussi les données, calculent un score et comptent les doublons ; l'extraction PDF est environ 45 fois plus lente que l'extraction textuelle directe avec PyMuPDF. Le streaming JSON Lines utilise environ 81 % moins d'allocation maximale suivie par Python que la lecture JSONL complète par pandas, mais prend environ 21 % plus de temps. Le streaming Excel est environ 7 % plus rapide que le scan Excel complet d'Iragi dans cette exécution. Ces comparaisons couvrent des opérations différentes ou une seule machine et fixture ; elles ne garantissent pas les mêmes résultats ailleurs.
 
 Pour reproduire le benchmark :
 
 ```bash
-python bench_suite.py --rows 100000 --chunksize 10000 --repeat 5 \
-  --output benchmarks/results.json --chart benchmarks/benchmark.svg
+python bench_suite.py --rows 100000 --excel-rows 25000 --reconcile-rows 10000 \
+  --chunksize 10000 --repeat 5
 ```
 
-Commandes utiles pour contribuer et vérifier le projet : `python -m pytest`, `bin/docs`, `python -m build` et `python -m twine check dist/*`.
+Cette commande génère les résultats JSON, le graphique des charges mesurées et les matrices de fonctionnalités anglaise et française dans `benchmarks/`.
+
+Elle génère aussi `benchmarks/accuracy.svg`, qui représente les contrôles d'exactitude sur les résultats attendus des fixtures.
+
+La CI exécute pytest. Les commandes `bin/docs`, `python -m build` et `python -m twine check dist/*` compilent localement la documentation et les artefacts de distribution.
 
 ---
 
@@ -512,40 +536,23 @@ Commandes utiles pour contribuer et vérifier le projet : `python -m pytest`, `b
 
 ```text
 iragi/
-├── bin/
-│   ├── _common.sh            # Configuration commune de l'environnement
-│   └── docs                  # Script de génération de la documentation Sphinx
-├── docs/
-│   ├── source/
-│   │   ├── conf.py           # Configuration Sphinx & extensions
-│   │   ├── index.rst         # Point d'entrée de la documentation
-│   │   └── api/              # Documentation automatique des modules
-│   └── build/                # Documentation HTML compilée
-├── iragi/
-│   ├── __init__.py           # Point d'entrée du package
-│   ├── core/                 # Modèles de données, configuration et exceptions
-│   │   ├── __init__.py
-│   │   ├── config.py
-│   │   ├── exceptions.py
-│   │   └── models.py
-│   ├── scan/                 # Moteur d'inspection et de qualité
-│   │   ├── __init__.py
-│   │   ├── engine.py
-│   │   └── profiler.py
-│   ├── pdf/                  # Moteur d'extraction PDF
-│   │   ├── __init__.py
-│   │   ├── extractor.py
-│   │   └── tables.py
-│   ├── all/                  # Orchestration du pipeline
-│   │   ├── __init__.py
-│   │   └── pipeline.py
-│   ├── reports/              # Générateurs de rapports (HTML, JSON)
-│   └── cli/                  # Commandes CLI Typer
-├── tests/                    # Tests unitaires et d'intégration
-├── examples/                 # Exemples d'utilisation
-├── pyproject.toml            # Métadonnées et dépendances du projet
-└── README.md
+  core/       configuration, modèles, erreurs et entrées distantes
+  scan/       lecteurs, profilage, contrats, nettoyage, dérive et rapports
+  pdf/        extraction, tableaux, outils OCR et modèles
+  reconcile/  rapprochement inter-sources et détection des conflits
+  all/        orchestration des analyses combinées
+  cli/        interface en ligne de commande
+tests/        tests automatisés
+examples/     exemples et notebooks
+benchmarks/   outil reproductible, résultats bruts et graphiques
+docs/source/  documentation Sphinx
+bin/          outils de génération de la documentation
+bench_suite.py
+pyproject.toml
+CHANGELOG.md
 ```
+
+Les API publiques sont réparties entre `scan`, `pdf` et `reconcile` ; `all` coordonne ces modules. Cette arborescence suit les sources présentes dans le dépôt. Les mesures et la CI aident à reproduire les vérifications, sans constituer un engagement de niveau de service.
 
 ---
 
@@ -557,14 +564,14 @@ Iragi s’appuie sur une pile Python courante pour l’inspection tabulaire, l�
 - **Extraction PDF :** **PyMuPDF** pour le texte et les métadonnées, **pdfplumber** pour les tableaux et Tesseract/Pillow pour l’OCR facultatif.
 - **Expérience développeur & Interface riche :** Une CLI moderne et fluide animée par **Typer** et **Rich**, offrant des diagnostics visuels colorés et lisibles directement dans votre terminal sans configuration préalable.
 - **Rapports & Restitution dynamique :** Moteur de templating **Jinja2** permettant la génération instantanée de synthèses JSON ou de rapports HTML exploitables par les décideurs métiers.
-- **Vérifications :** Tests automatisés exécutés par GitHub Actions sur Python 3.10–3.13 et pandas 2.x/3.x, avec rapports de couverture Codecov.
+- **Vérifications :** GitHub Actions exécute les tests sur Python 3.10–3.13 et pandas 2.x/3.x, sous Linux et Windows. Le transfert de couverture Codecov est activé uniquement si `CODECOV_TOKEN` est configuré.
 
-### Un potentiel d'extension illimité
+### Cas d'utilisation
 
 Grâce à son architecture découplée et composable, **Iragi s'intègre en quelques lignes de code** au cœur de vos projets stratégiques :
 - **Pipelines ETL & Data Lakes :** Validation automatique des schémas et de la qualité des données avant ingestion dans vos entrepôts.
 - **Applications Web & Microservices (Django / FastAPI) :** Analyse à la volée des uploads utilisateurs avec retour immédiat sur la conformité des fichiers.
-- **Agents IA & LLM RAG :** Préparation, nettoyage et découpage de documents tabulaires et PDF pour alimenter des bases vectorielles avec des données d'une pureté irréprochable.
+- **Pipelines de recherche et RAG :** Préparation et extraction de documents tabulaires ou PDF avant indexation ; les résultats dépendent des données et des règles définies.
 
 ---
 
@@ -577,7 +584,7 @@ Grâce à son architecture découplée et composable, **Iragi s'intègre en quel
 5. **Score explicable et traçable :** Tout score de qualité expose la formule et les pénalités appliquées.
 6. **Gestion explicite des erreurs :** Aucune exception masquée silencieusement.
 7. **Dépendances optionnelles :** Un utilisateur de `iragi.scan` ne télécharge pas les dépendances de rendu PDF ou OCR.
-8. **Documentation exhaustive :** Chaque fonction, classe et module est documenté selon le standard Sphinx avec exemples.
+8. **Documentation maintenue :** La documentation Sphinx décrit les API publiques et les principaux parcours ; la couverture des docstrings varie selon les modules.
 
 ---
 

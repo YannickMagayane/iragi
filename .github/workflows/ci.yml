@@ -40,8 +40,22 @@ jobs:
         shell: bash
         run: pytest -v --cov=iragi --cov-report=xml --cov-report=term
 
-      - name: Upload coverage report
+      - name: Check whether Codecov token is configured
+        id: codecov-token
         if: runner.os == 'Linux' && matrix.python-version == '3.12' && matrix.pandas-spec == '>=2,<3'
+        shell: bash
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          if [ -n "$CODECOV_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "CODECOV_TOKEN is not configured; skipping coverage upload."
+          fi
+
+      - name: Upload coverage report
+        if: runner.os == 'Linux' && matrix.python-version == '3.12' && matrix.pandas-spec == '>=2,<3' && steps.codecov-token.outputs.available == 'true'
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
@@ -68,7 +82,7 @@ jobs:
           mkdir -p docs/source/benchmarks
           cp README.md docs/source/readme.md
           cp README.fr.md docs/source/readme_fr.md
-          cp benchmarks/benchmark.svg docs/source/benchmarks/benchmark.svg
+          cp benchmarks/*.svg docs/source/benchmarks/
           sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi
           sphinx-build -b html docs/source docs/build/html
 
