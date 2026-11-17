@@ -50,6 +50,7 @@ L'objectif est de fournir une bibliothèque réutilisable dans des scripts Pytho
 - [Réconciliation multi-sources par consensus](#réconciliation-multi-sources-par-consensus-iragireconcile_multi)
 - [Traitement par blocs des gros fichiers (CSV, Excel, PDF)](#traitement-par-blocs-des-gros-fichiers-csv-excel-pdf)
 - [Interface CLI](#interface-cli)
+- [Benchmarks](#benchmarks)
 - [Rapports](#rapports)
 - [Documentation Sphinx](#documentation-sphinx)
 - [Architecture du projet](#architecture-du-projet)
@@ -485,6 +486,25 @@ bin/docs --clean -E -a
 ```
 
 La documentation compilée est générée dans `docs/build/html/index.html`.
+
+---
+
+## Benchmarks
+
+Le banc d'essai crée un CSV de 100 000 lignes avec 10 % de doublons et un PDF de 100 pages. Chaque mode reçoit un échauffement puis cinq mesures dans des processus séparés. Le rapport conserve les médianes, les plages min/max et toutes les mesures brutes. Le test CSV compare `pandas.read_csv` seul au scan complet classique et au scan par blocs d'Iragi : pandas ne profile ni ne calcule de score, donc ces durées décrivent des charges différentes. Le test PDF compare l'extraction texte de PyMuPDF à celle d'Iragi et vérifie l'égalité du texte après normalisation des espaces.
+
+![Graphique comparatif du benchmark](benchmarks/benchmark.svg)
+
+Les [résultats détaillés](benchmarks/results.json) décrivent la machine inscrite dans le JSON. Sur cette fixture, le scan par blocs compte les 10 000 doublons, mais prend environ 3,75 fois plus de temps que le scan classique et utilise environ 52 % d'allocation Python suivie supplémentaire, car le comptage conserve les empreintes des lignes. Cette mesure exclut les allocations natives de pandas/NumPy et ne représente pas la RAM totale du processus. Les performances varient selon le matériel et les données.
+
+Pour reproduire le benchmark :
+
+```bash
+python bench_suite.py --rows 100000 --chunksize 10000 --repeat 5 \
+  --output benchmarks/results.json --chart benchmarks/benchmark.svg
+```
+
+Commandes utiles pour contribuer et vérifier le projet : `python -m pytest`, `bin/docs`, `python -m build` et `python -m twine check dist/*`.
 
 ---
 

@@ -65,8 +65,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p docs/source/api docs/source/_static docs/source/_templates
+          mkdir -p docs/source/benchmarks
           cp README.md docs/source/readme.md
           cp README.fr.md docs/source/readme_fr.md
+          cp benchmarks/benchmark.svg docs/source/benchmarks/benchmark.svg
           sphinx-apidoc -f -e --remove-old -o docs/source/api -H Modules iragi
           sphinx-build -b html docs/source docs/build/html
 

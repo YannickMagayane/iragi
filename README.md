@@ -484,7 +484,13 @@ Iragi uses a Python stack that includes:
 
 ## Benchmarks
 
-Re-run the CSV and PDF timing suite with `python bench_suite.py --rows 100000 --output benchmarks/results.json`. The checked-in [results](https://github.com/YannickMagayane/iragi/blob/main/benchmarks/results.json) are a local Python 3.14.4/Linux sample. Reported memory is Python-traced allocation and excludes pandas/NumPy native allocations; timings are hardware-dependent.
+The reproducible suite creates a 100,000-row CSV fixture with 10% duplicate rows and a 100-page PDF fixture. It runs one warm-up and five timed samples per mode in independent processes, then reports medians, ranges, and raw samples. The CSV comparison includes parser-only `pandas.read_csv`, full classic Iragi scan, and chunked Iragi scan; the PDF comparison checks normalized text equality between PyMuPDF and Iragi extraction. Parser-only and full-scan timings are different workloads, so use them as context rather than a direct speed contest.
+
+![Benchmark comparison chart](benchmarks/benchmark.svg)
+
+The current benchmark results (in [`benchmarks/results.json`](https://github.com/YannickMagayane/iragi/blob/main/benchmarks/results.json)) describe the machine recorded in the JSON. On the checked-in fixture, chunked scan counted all 10,000 duplicates but took about 3.7× as long as classic scan and used about 52% more Python-traced peak allocation because duplicate counting retains row hashes. Memory excludes native pandas/NumPy allocations and is not total process RAM. Timings depend on the hardware and fixture.
+
+Run it with `python bench_suite.py --rows 100000 --chunksize 10000 --repeat 5 --output benchmarks/results.json --chart benchmarks/benchmark.svg`. Useful project checks are `python -m pytest`, `bin/docs`, `python -m build`, and `python -m twine check dist/*`.
 
 ## Changelog
 
@@ -494,11 +500,11 @@ See [CHANGELOG.md](https://github.com/YannickMagayane/iragi/blob/main/CHANGELOG.
 
 ## 🇫🇷 Aperçu en Français
 
-**Iragi** est une bibliothèque logicielle Python de niveau industriel dédiée à l'inspection de qualité de données et à l'extraction de documents complexes (CSV, Excel, JSON et PDF).
+**Iragi** est une bibliothèque logicielle Python dédiée à l'inspection de qualité de données et à l'extraction de documents complexes (CSV, Excel, JSON et PDF).
 
 - **Architecture :** Deux moteurs indépendants (`iragi.scan` et `iragi.pdf`) coordonnés par un pipeline unifié (`iragi.all`).
 - **Score de qualité transparent :** Note sur 100 avec explications claires des anomalies (doublons, valeurs manquantes, outliers).
-- **Extraction PDF :** Récupération ultra-rapide du texte, détection de scans papier (OCR) et conversion de tableaux en DataFrames Pandas.
+- **Extraction PDF :** Récupération du texte, détection de scans papier (OCR) et conversion de tableaux en DataFrames Pandas.
 - **Documentation complète en français :** [Lire le guide complet en français (README.fr.md)](https://github.com/YannickMagayane/iragi/blob/main/README.fr.md).
 
 ---

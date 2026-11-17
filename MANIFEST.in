@@ -4,6 +4,7 @@ include pyproject.toml
 include CHANGELOG.md
 include bench_suite.py
 include benchmarks/results.json
+include benchmarks/benchmark.svg
 
 recursive-include examples *.ipynb
 

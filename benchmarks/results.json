@@ -1,46 +1,280 @@
 {
-  "rows_requested": 100000,
+  "fixture": {
+    "csv_rows": 100000,
+    "csv_columns": 3,
+    "csv_expected_duplicate_rows": 10000,
+    "csv_duplicate_rate_percent": 10.0,
+    "pdf_pages": 100
+  },
+  "repeat": 5,
+  "warmups_per_mode": 1,
   "chunksize": 10000,
   "environment": {
+    "iragi": "0.6.3",
     "python": "3.14.4",
     "pandas": "3.1.1",
-    "iragi": "0.6.3",
     "platform": "Linux-7.0.0-43-generic-x86_64-inconnu-with-glibc2.43",
     "cpu_count": 16
   },
-  "measurement_note": "python_traced_peak_bytes excludes native pandas/NumPy allocations; timings are local, not a performance guarantee.",
+  "method_notes": [
+    "Each sample runs in a fresh subprocess; imports are excluded from elapsed time.",
+    "Pandas read_csv is a parser-only baseline; Iragi scans also profile, score and count duplicates.",
+    "PDF compares PyMuPDF text extraction with Iragi extract(extract_tables=False); normalized SHA-256 checks text equality.",
+    "Python-traced peak excludes native allocations and is not total process RAM.",
+    "Medians, min/max and raw samples are reported; results describe this machine and fixture only."
+  ],
+  "comparisons": {
+    "csv_stream_vs_classic_time_ratio": 3.6458065581100647,
+    "csv_stream_python_traced_peak_change_percent": 51.77863015760145,
+    "iragi_classic_vs_pandas_parse_time_ratio": 3.417517726096505,
+    "iragi_pdf_vs_pymupdf_time_ratio": 1.1350855960837825,
+    "pdf_normalized_text_matches": true
+  },
+  "pdf_normalized_text_matches": true,
   "results": {
-    "pandas": {
-      "seconds": 0.051046,
-      "python_traced_peak_bytes": 2093187,
-      "rows": 100000,
-      "columns": 3
+    "csv": {
+      "pandas_read_csv": {
+        "median_seconds": 0.02949774399985472,
+        "min_seconds": 0.029465053000421904,
+        "max_seconds": 0.03006435200040869,
+        "median_python_traced_peak_bytes": 2102110,
+        "samples": [
+          {
+            "seconds": 0.029465053000421904,
+            "python_traced_peak_bytes": 2102110,
+            "rows": 100000,
+            "columns": 3
+          },
+          {
+            "seconds": 0.029475792999619443,
+            "python_traced_peak_bytes": 2102110,
+            "rows": 100000,
+            "columns": 3
+          },
+          {
+            "seconds": 0.03006435200040869,
+            "python_traced_peak_bytes": 2102110,
+            "rows": 100000,
+            "columns": 3
+          },
+          {
+            "seconds": 0.0300264210000023,
+            "python_traced_peak_bytes": 2102065,
+            "rows": 100000,
+            "columns": 3
+          },
+          {
+            "seconds": 0.02949774399985472,
+            "python_traced_peak_bytes": 2102110,
+            "rows": 100000,
+            "columns": 3
+          }
+        ],
+        "seconds": 0.02949774399985472,
+        "python_traced_peak_bytes": 2102110,
+        "rows": 100000,
+        "columns": 3
+      },
+      "iragi_classic": {
+        "median_seconds": 0.10080906299936032,
+        "min_seconds": 0.09829644999990705,
+        "max_seconds": 0.10204961999988882,
+        "median_python_traced_peak_bytes": 7229693,
+        "samples": [
+          {
+            "seconds": 0.10080906299936032,
+            "python_traced_peak_bytes": 7229826,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000
+          },
+          {
+            "seconds": 0.10204961999988882,
+            "python_traced_peak_bytes": 7229488,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000
+          },
+          {
+            "seconds": 0.10194370000044728,
+            "python_traced_peak_bytes": 7229549,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000
+          },
+          {
+            "seconds": 0.09930231499947695,
+            "python_traced_peak_bytes": 7229693,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000
+          },
+          {
+            "seconds": 0.09829644999990705,
+            "python_traced_peak_bytes": 7229806,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000
+          }
+        ],
+        "seconds": 0.09829644999990705,
+        "python_traced_peak_bytes": 7229806,
+        "rows": 100000,
+        "score": 97.5,
+        "duplicate_rows": 10000
+      },
+      "iragi_stream": {
+        "median_seconds": 0.36753034299999854,
+        "min_seconds": 0.360815654000362,
+        "max_seconds": 0.4070459980002852,
+        "median_python_traced_peak_bytes": 10973129,
+        "samples": [
+          {
+            "seconds": 0.360815654000362,
+            "python_traced_peak_bytes": 10973272,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 0.36753034299999854,
+            "python_traced_peak_bytes": 10973123,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 0.3840140430002066,
+            "python_traced_peak_bytes": 10973262,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 0.36262225799964654,
+            "python_traced_peak_bytes": 10972894,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000,
+            "score_is_estimated": true
+          },
+          {
+            "seconds": 0.4070459980002852,
+            "python_traced_peak_bytes": 10973129,
+            "rows": 100000,
+            "score": 97.5,
+            "duplicate_rows": 10000,
+            "score_is_estimated": true
+          }
+        ],
+        "seconds": 0.4070459980002852,
+        "python_traced_peak_bytes": 10973129,
+        "rows": 100000,
+        "score": 97.5,
+        "duplicate_rows": 10000,
+        "score_is_estimated": true
+      }
     },
-    "classic": {
-      "seconds": 0.153365,
-      "python_traced_peak_bytes": 7240013,
-      "rows": 100000,
-      "score": 77.5
-    },
-    "stream": {
-      "seconds": 0.320339,
-      "python_traced_peak_bytes": 3182284,
-      "rows": 100000,
-      "score": 77.5,
-      "duplicate_rows": 90000,
-      "score_is_estimated": true
-    },
-    "pdf_pymupdf": {
-      "seconds": 2.249162,
-      "python_traced_peak_bytes": 16115021,
-      "pages": 100,
-      "characters": 10699
-    },
-    "pdf_iragi": {
-      "seconds": 2.228871,
-      "python_traced_peak_bytes": 16115723,
-      "pages": 100,
-      "characters": 10797
+    "pdf": {
+      "pymupdf_text_only": {
+        "median_seconds": 0.04838007299986202,
+        "min_seconds": 0.04784080699937476,
+        "max_seconds": 0.05138880100003007,
+        "median_python_traced_peak_bytes": 150155,
+        "samples": [
+          {
+            "seconds": 0.05138880100003007,
+            "python_traced_peak_bytes": 151191,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          },
+          {
+            "seconds": 0.050210060999233974,
+            "python_traced_peak_bytes": 149329,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          },
+          {
+            "seconds": 0.04838007299986202,
+            "python_traced_peak_bytes": 151020,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          },
+          {
+            "seconds": 0.04784080699937476,
+            "python_traced_peak_bytes": 150155,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          },
+          {
+            "seconds": 0.04805524099992908,
+            "python_traced_peak_bytes": 148157,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          }
+        ],
+        "seconds": 0.04805524099992908,
+        "python_traced_peak_bytes": 148157,
+        "pages": 100,
+        "characters": 10599,
+        "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+      },
+      "iragi_extract_text": {
+        "median_seconds": 0.05491552399962529,
+        "min_seconds": 0.05417084100008651,
+        "max_seconds": 0.05651908399977401,
+        "median_python_traced_peak_bytes": 183858,
+        "samples": [
+          {
+            "seconds": 0.05556972599970322,
+            "python_traced_peak_bytes": 183858,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          },
+          {
+            "seconds": 0.05434721300025558,
+            "python_traced_peak_bytes": 181751,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          },
+          {
+            "seconds": 0.05491552399962529,
+            "python_traced_peak_bytes": 181698,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          },
+          {
+            "seconds": 0.05417084100008651,
+            "python_traced_peak_bytes": 183986,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          },
+          {
+            "seconds": 0.05651908399977401,
+            "python_traced_peak_bytes": 183982,
+            "pages": 100,
+            "characters": 10599,
+            "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+          }
+        ],
+        "seconds": 0.05651908399977401,
+        "python_traced_peak_bytes": 183982,
+        "pages": 100,
+        "characters": 10599,
+        "text_sha256": "96fae1743341e46ce57c27f82cf6e2bcd150854b517730933548ff024abf2fbd"
+      }
     }
   }
 }

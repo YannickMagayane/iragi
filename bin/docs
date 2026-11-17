@@ -62,6 +62,8 @@ fi
 
 # Ensure directories exist and copy README for Sphinx MyST parser
 mkdir -p docs/source/api docs/source/_static docs/source/_templates docs/build/html
+mkdir -p docs/source/benchmarks
+cp benchmarks/benchmark.svg docs/source/benchmarks/benchmark.svg
 if [ -f "README.md" ]; then
     cp README.md docs/source/readme.md
 fi
